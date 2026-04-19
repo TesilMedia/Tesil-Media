@@ -2,6 +2,13 @@ type VideoPlayerProps = {
   src: string;
   title?: string;
   className?: string;
+  /**
+   * Wall-clock moment the broadcast started (from `LiveStream.startedAt`).
+   * Forwarded to the embedded player so its live-time readout can show
+   * "elapsed since broadcast start" — the HLS manifest alone only exposes the
+   * last ~12 s of segments so the player can't derive a true start on its own.
+   */
+  liveStartedAt?: Date | string | null;
 };
 
 /**
@@ -11,8 +18,21 @@ type VideoPlayerProps = {
  * most faithful way to use it inside Next.js without rewriting it as a
  * React component.
  */
-export function VideoPlayer({ src, title, className }: VideoPlayerProps) {
-  const iframeSrc = `/video-player/embed.html?src=${encodeURIComponent(src)}`;
+export function VideoPlayer({
+  src,
+  title,
+  className,
+  liveStartedAt,
+}: VideoPlayerProps) {
+  const startedAtIso =
+    liveStartedAt instanceof Date
+      ? liveStartedAt.toISOString()
+      : typeof liveStartedAt === "string" && liveStartedAt
+        ? liveStartedAt
+        : null;
+  const iframeSrc = startedAtIso
+    ? `/video-player/embed.html?src=${encodeURIComponent(src)}&startedAt=${encodeURIComponent(startedAtIso)}`
+    : `/video-player/embed.html?src=${encodeURIComponent(src)}`;
   return (
     <div
       className={`relative w-full overflow-hidden rounded-lg bg-black ${
@@ -27,7 +47,7 @@ export function VideoPlayer({ src, title, className }: VideoPlayerProps) {
         allow="fullscreen; picture-in-picture; autoplay"
         allowFullScreen
         referrerPolicy="strict-origin-when-cross-origin"
-        loading="lazy"
+        loading="eager"
       />
     </div>
   );

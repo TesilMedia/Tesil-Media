@@ -1,5 +1,8 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { mkdirSync, rmSync } from "node:fs";
+import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
 import NodeMediaServer from "node-media-server";
 
@@ -8,6 +11,20 @@ const RTMP_PORT = Number(process.env.RTMP_PORT ?? 1935);
 const HTTP_PORT = Number(process.env.HLS_HTTP_PORT ?? 8000);
 const NEXT_APP_URL = process.env.NEXT_APP_URL ?? "http://localhost:3000";
 const STREAM_HOOK_SECRET = process.env.STREAM_HOOK_SECRET ?? "";
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const MEDIA_ROOT = path.join(REPO_ROOT, "media");
+const HLS_ROOT = path.join(MEDIA_ROOT, APP_NAME);
+
+/** Active `ffmpeg` subprocesses transcoding RTMP → HLS, keyed by stream slug. */
+const transcoders = new Map();
+
+/**
+ * NMS fires `prePublish` and `postPublish` back-to-back in the same synchronous
+ * call (see broadcast_server.postPublish). We record successful auths in
+ * prePublish so that postPublish only spawns ffmpeg for authorized streams.
+ */
+const authorizedStreams = new Set();
 
 function ensureFfmpegOnPath() {
   try {
@@ -117,14 +134,109 @@ async function postHookPayloadAsync(payload) {
   }
 }
 
+/**
+ * NMS v4 dropped the FFmpeg/HLS transcoder that shipped with v2/v3, so we spawn
+ * `ffmpeg` ourselves and point it at our own RTMP server as a subscriber. The
+ * resulting HLS lands under `media/live/<slug>/` which NMS serves via its
+ * `static` route on port 8000 (same origin the Next `/hls/*` rewrite targets).
+ */
+function startHlsTranscoder(slug) {
+  stopHlsTranscoder(slug);
+
+  const hlsDir = path.join(HLS_ROOT, slug);
+  mkdirSync(hlsDir, { recursive: true });
+
+  const rtmpSubscribeUrl = `rtmp://127.0.0.1:${RTMP_PORT}/${APP_NAME}/${slug}`;
+  const manifestPath = path.join(hlsDir, "index.m3u8");
+  const segmentPath = path.join(hlsDir, "seg_%05d.ts");
+
+  const args = [
+    "-hide_banner",
+    "-loglevel", "warning",
+    "-fflags", "nobuffer+genpts",
+    "-rw_timeout", "15000000",
+    "-i", rtmpSubscribeUrl,
+    "-c:v", "copy",
+    "-c:a", "aac",
+    "-ar", "44100",
+    "-b:a", "128k",
+    "-f", "hls",
+    // Shorter segments + a tight first segment cut latency down at the cost of
+    // more playlist/segment HTTP traffic. Viewers stay closer to OBS; typical
+    // glass-to-glass with plain HLS is still several seconds behind WebRTC.
+    "-hls_time", "1",
+    // Emit the first segment quickly (may still wait for a keyframe from OBS).
+    "-hls_init_time", "0.5",
+    "-hls_list_size", "8",
+    // `program_date_time` emits EXT-X-PROGRAM-DATE-TIME on every segment so players
+    // can show a real wall-clock timestamp aligned with OBS instead of relative
+    // seconds into the live window (which drifts per-browser and per-reload).
+    "-hls_flags", "delete_segments+append_list+independent_segments+omit_endlist+program_date_time",
+    "-hls_segment_filename", segmentPath,
+    "-y",
+    manifestPath,
+  ];
+
+  const child = spawn("ffmpeg", args, {
+    stdio: ["ignore", "inherit", "inherit"],
+    windowsHide: true,
+  });
+
+  transcoders.set(slug, child);
+  console.log(`[ffmpeg] started HLS transcoder for ${slug} (pid=${child.pid})`);
+
+  child.on("exit", (code, signal) => {
+    if (transcoders.get(slug) === child) transcoders.delete(slug);
+    console.log(
+      `[ffmpeg] exited for ${slug} (code=${code ?? "null"} signal=${signal ?? "null"})`,
+    );
+  });
+
+  child.on("error", (err) => {
+    console.error(`[ffmpeg] failed to spawn for ${slug}:`, err);
+    if (transcoders.get(slug) === child) transcoders.delete(slug);
+  });
+}
+
+function stopHlsTranscoder(slug) {
+  const child = transcoders.get(slug);
+  if (!child) return;
+  transcoders.delete(slug);
+  try {
+    child.kill("SIGINT");
+  } catch {
+    /* noop */
+  }
+  // SIGINT lets ffmpeg flush a final segment and write the end tag; fall back after 3s.
+  setTimeout(() => {
+    if (!child.killed) {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        /* noop */
+      }
+    }
+  }, 3000).unref();
+}
+
+function cleanupHlsDir(slug) {
+  const hlsDir = path.join(HLS_ROOT, slug);
+  try {
+    rmSync(hlsDir, { recursive: true, force: true });
+  } catch (err) {
+    console.warn(`[nms] failed to clean HLS dir for ${slug}:`, err);
+  }
+}
+
 async function main() {
   ensureFfmpegOnPath();
   if (!STREAM_HOOK_SECRET) {
     throw new Error("STREAM_HOOK_SECRET is required for media server hooks.");
   }
 
+  mkdirSync(HLS_ROOT, { recursive: true });
+
   const nms = new NodeMediaServer({
-    logType: 2,
     rtmp: {
       port: RTMP_PORT,
       chunk_size: 60000,
@@ -134,23 +246,15 @@ async function main() {
     },
     http: {
       port: HTTP_PORT,
-      mediaroot: "./media",
-      allow_origin: "*",
     },
-    trans: {
-      ffmpeg: "ffmpeg",
-      tasks: [
-        {
-          app: APP_NAME,
-          hls: true,
-          hlsFlags: "[hls_time=2:hls_list_size=6:hls_flags=delete_segments+append_list]",
-          hlsKeep: false,
-        },
-      ],
+    // NMS v4 serves arbitrary static files here — we point `/live` at the HLS
+    // directory so `http://<host>:8000/live/<slug>/index.m3u8` resolves directly.
+    static: {
+      router: `/${APP_NAME}`,
+      root: HLS_ROOT,
     },
   });
 
-  // Node Media Server v4: single argument `session` (BaseSession), not (id, path, args).
   nms.on("prePublish", (session) => {
     const { streamName, key } = publishAuthFromSession(session);
     if (!streamName || !key) {
@@ -165,15 +269,30 @@ async function main() {
 
     try {
       postHookSync({ event: "prePublish", streamName, key });
+      authorizedStreams.add(streamName);
     } catch (err) {
       console.error("[nms] prePublish hook failed:", err);
+      authorizedStreams.delete(streamName);
       session.close();
     }
   });
 
+  nms.on("postPublish", (session) => {
+    const { streamName } = publishAuthFromSession(session);
+    if (!streamName || !authorizedStreams.has(streamName)) return;
+    // The publisher's RTMP socket is already attached by the time this event
+    // fires, so our ffmpeg subscriber can connect immediately and the first
+    // HLS segment is typically written within ~hls_time seconds.
+    startHlsTranscoder(streamName);
+  });
+
   nms.on("donePublish", (session) => {
     const { streamName, key } = publishAuthFromSession(session);
-    if (!streamName || !key) return;
+    if (!streamName) return;
+    const wasAuthorized = authorizedStreams.delete(streamName);
+    stopHlsTranscoder(streamName);
+    if (wasAuthorized) cleanupHlsDir(streamName);
+    if (!wasAuthorized || !key) return;
     void postHookPayloadAsync({
       event: "donePublish",
       streamName,
@@ -183,9 +302,19 @@ async function main() {
     });
   });
 
+  const shutdown = () => {
+    console.log("[nms] shutting down, stopping transcoders");
+    for (const slug of [...transcoders.keys()]) stopHlsTranscoder(slug);
+    process.exit(0);
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
+
   nms.run();
   console.log(`[nms] RTMP listening on rtmp://localhost:${RTMP_PORT}/${APP_NAME}`);
-  console.log(`[nms] HLS output served at http://localhost:${HTTP_PORT}/${APP_NAME}`);
+  console.log(
+    `[nms] HLS output served at http://localhost:${HTTP_PORT}/${APP_NAME}/<slug>/index.m3u8`,
+  );
 }
 
 main().catch((err) => {

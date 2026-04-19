@@ -28,6 +28,7 @@
   const tooltipLayer = document.getElementById("tooltipLayer");
   const frameBackBtn = document.getElementById("frameBack");
   const frameForwardBtn = document.getElementById("frameForward");
+  const goLiveBtn = document.getElementById("goLive");
   const ratePill = player.querySelector(".player__rate");
   const chromeEl = player.querySelector(".player__chrome");
   const cornerTools = player.querySelector(".player__corner-tools");
@@ -48,6 +49,21 @@
     String(startupQuery.get("embed") || "").toLowerCase()
   );
   const startupSourceFromQuery = String(startupQuery.get("src") || "").trim();
+  /**
+   * Wall-clock moment the broadcast started, supplied by the host page (see
+   * `VideoPlayer.tsx`). The HLS manifest only exposes the last few segments,
+   * so without this value the player has no way to compute "time since the
+   * broadcast began" — each browser picks a different effective zero, which is
+   * why Chrome was showing 0 while Firefox/Safari showed the ffmpeg start
+   * wall-clock. Prefer this value when present; fall back to the oldest PDT
+   * fragment in the playlist otherwise.
+   */
+  const startupStartedAtMs = (() => {
+    const raw = String(startupQuery.get("startedAt") || "").trim();
+    if (!raw) return null;
+    const t = Date.parse(raw);
+    return Number.isFinite(t) && t > 0 ? t : null;
+  })();
 
   function applyEmbedMode() {
     if (!embedModeRequested) return;
@@ -65,9 +81,287 @@
   let hasCustomSource = false;
   /** `native` = `<video>`; other values use an iframe embed and hide custom chrome. */
   let sourceKind = "native";
+  /** Active hls.js instance, when streaming an m3u8 via MSE. Null otherwise. */
+  let hlsInstance = null;
+  /**
+   * True while the active URL is `.m3u8` (sliding-window / live-style). Used before metadata
+   * so we still treat the session as live for autoplay + snap-to-edge (Safari native HLS).
+   */
+  let expectsLiveHlsPlayback = false;
+
+  function detachHlsInstance() {
+    if (!hlsInstance) return;
+    try {
+      hlsInstance.destroy();
+    } catch (_) {
+      /* noop */
+    }
+    hlsInstance = null;
+  }
+
+  function isHlsUrl(urlStr) {
+    if (!urlStr) return false;
+    try {
+      const u = new URL(urlStr, window.location.href);
+      return /\.m3u8(?:$|\?)/i.test(u.pathname + u.search);
+    } catch (_) {
+      return /\.m3u8(?:$|\?)/i.test(String(urlStr));
+    }
+  }
+
+  function isLiveDuration() {
+    return video.duration === Infinity;
+  }
 
   function isExternalEmbedSource() {
     return sourceKind !== "native";
+  }
+
+  /**
+   * How close to the playlist live edge we must be before the LIVE badge lights up.
+   * Low-latency HLS hovers ~2–3 s behind the edge even under ideal conditions; pad a
+   * little past that so normal playback reads as "at live" without flicker.
+   */
+  const LIVE_EDGE_AT_TOLERANCE_SEC = 5;
+
+  function getSeekableEndTime() {
+    try {
+      const seekable = video.seekable;
+      if (seekable && seekable.length > 0) {
+        const end = seekable.end(seekable.length - 1);
+        if (Number.isFinite(end) && end > 0) return end;
+      }
+    } catch (_) {
+      /* seekable can throw before metadata arrives */
+    }
+    return null;
+  }
+
+  /** hls.js suggested sync point (often a few seconds behind the true buffer edge). */
+  function getHlsLiveSyncTime() {
+    if (!hlsInstance) return null;
+    const sync = hlsInstance.liveSyncPosition;
+    if (Number.isFinite(sync) && sync > 0) return sync;
+    return null;
+  }
+
+  /**
+   * Target time for "go live" / initial snap: never rewind vs current playback.
+   * Prefer the right edge of `seekable` (closest to the newest media) over `liveSyncPosition`,
+   * which can sit several seconds behind and caused visible rewinds when already near live.
+   */
+  function getJumpToLiveTargetTime() {
+    if (!isLiveStream()) return null;
+    const cur = video.currentTime;
+    const end = getSeekableEndTime();
+    const sync = getHlsLiveSyncTime();
+    const edgeSignals = [end, sync].filter(
+      (x) => typeof x === "number" && Number.isFinite(x) && x > 0
+    );
+    if (!edgeSignals.length) return null;
+    const edge = Math.max(...edgeSignals);
+    return Math.max(cur, edge);
+  }
+
+  /** Reference "live edge" for UI proximity (seekable end when known, else hls sync). */
+  function getLiveEdgeTime() {
+    const end = getSeekableEndTime();
+    if (end != null) return end;
+    return getHlsLiveSyncTime();
+  }
+
+  /**
+   * Wall-clock milliseconds for the frame currently on screen, derived from the
+   * HLS EXT-X-PROGRAM-DATE-TIME tag. This is what lets the displayed timestamp
+   * track OBS itself rather than "seconds since the live window started" (which
+   * differs by browser, by reload, and by localhost-vs-server). Returns `null`
+   * when PDT isn't available yet so callers can fall back to relative time.
+   */
+  function getProgramDateTimeMs() {
+    if (hlsInstance) {
+      const d = hlsInstance.playingDate;
+      if (d instanceof Date) {
+        const t = d.getTime();
+        if (Number.isFinite(t) && t > 0) return t;
+      }
+    }
+    // Safari native HLS exposes PDT via `<video>.getStartDate()`: the Date at
+    // `currentTime === 0`. Adding `currentTime` gives the live wall-clock.
+    if (typeof video.getStartDate === "function") {
+      try {
+        const start = video.getStartDate();
+        if (start instanceof Date) {
+          const startMs = start.getTime();
+          if (Number.isFinite(startMs) && startMs > 0) {
+            return startMs + video.currentTime * 1000;
+          }
+        }
+      } catch (_) {
+        /* getStartDate can throw before metadata / on non-live sources */
+      }
+    }
+    return null;
+  }
+
+  function getLiveEdgeWallClockMs() {
+    const wallMs = getProgramDateTimeMs();
+    if (wallMs == null) return null;
+    const edge = getLiveEdgeTime();
+    if (edge == null) return wallMs;
+    return wallMs + Math.max(0, edge - video.currentTime) * 1000;
+  }
+
+  /**
+   * Returns ms elapsed since the broadcast started, for the frame currently
+   * on screen. Based on the host-supplied `startedAt` query param (what OBS /
+   * our DB know); otherwise the manifest's oldest PDT (which is only the last
+   * few seconds of the sliding window and will undercount long streams).
+   */
+  function getLiveElapsedMs() {
+    const wallMs = getProgramDateTimeMs();
+    if (wallMs == null) return null;
+    const startMs = startupStartedAtMs;
+    if (startMs == null) return null;
+    return Math.max(0, wallMs - startMs);
+  }
+
+  function getLiveDurationMs() {
+    const edgeMs = getLiveEdgeWallClockMs();
+    if (edgeMs == null) return null;
+    const startMs = startupStartedAtMs;
+    if (startMs == null) return null;
+    return Math.max(0, edgeMs - startMs);
+  }
+
+  function isLiveStream() {
+    if (hlsInstance) return true;
+    if (expectsLiveHlsPlayback) return true;
+    return isLiveDuration();
+  }
+
+  /**
+   * Autoplay policies across browsers are inconsistent: Chrome refuses audible
+   * autoplay without a user gesture, Safari is more lenient when the tab is
+   * visible, Firefox varies by profile. The only path that works everywhere
+   * (including after a reload) is "play muted, then let the user unmute". We
+   * retry once muted on rejection so live streams reliably auto-start.
+   */
+  function tryPlayLiveMedia() {
+    if (!isLiveStream()) return;
+    const p = video.play();
+    if (p && typeof p.catch === "function") {
+      p.catch(() => {
+        if (!video.muted) {
+          video.muted = true;
+          setMutedUI();
+          const r = video.play();
+          if (r && typeof r.catch === "function") r.catch(() => {});
+        }
+      });
+    }
+  }
+
+  function seekToLiveEdge() {
+    if (!isLiveStream()) return false;
+    const t = getJumpToLiveTargetTime();
+    if (t == null) return false;
+    try {
+      /* Already at the newest seekable frame (within one frame). */
+      if (t - video.currentTime <= 1 / 30) return true;
+      video.currentTime = t;
+      return true;
+    } catch (_) {
+      /* seek may be rejected briefly while the source is still attaching */
+      return false;
+    }
+  }
+
+  /**
+   * Latched true whenever a new live source is loading; cleared after we successfully snap
+   * to the live edge. `liveSyncPosition` / `video.seekable` may not populate until a few
+   * events after MANIFEST_PARSED, so retry on later events instead of seeking just once.
+   */
+  let pendingInitialLiveSeek = false;
+  /** Clears a stuck `pendingInitialLiveSeek` if `seekable` never appears (rare). */
+  let initialLiveSeekGuardTimer = null;
+  /** Polls `tryConsumeInitialLiveSeek` at a fixed cadence for cross-browser parity. */
+  let initialLiveSeekPollTimer = null;
+  const INITIAL_LIVE_SEEK_GUARD_MS = 8000;
+  /** Short poll interval: snap the frame we're waiting on the moment it's available. */
+  const INITIAL_LIVE_SEEK_POLL_MS = 120;
+
+  function clearInitialLiveSeekPoll() {
+    if (initialLiveSeekPollTimer != null) {
+      clearInterval(initialLiveSeekPollTimer);
+      initialLiveSeekPollTimer = null;
+    }
+  }
+
+  function clearInitialLiveSeekGuard() {
+    if (initialLiveSeekGuardTimer != null) {
+      clearTimeout(initialLiveSeekGuardTimer);
+      initialLiveSeekGuardTimer = null;
+    }
+    clearInitialLiveSeekPoll();
+  }
+
+  /**
+   * Request a snap-to-live-edge as soon as the pipeline is ready. Instead of
+   * relying on a single HLS event (MANIFEST_PARSED / LEVEL_UPDATED fires at
+   * different points on Safari vs hls.js, and locally vs over real network),
+   * we start a short polling loop that consumes the seek the instant either
+   * `seekable.end` or `liveSyncPosition` is usable. This is what makes the
+   * first-load/reload behavior consistent across browsers and hosts.
+   */
+  function requestInitialLiveSeek() {
+    pendingInitialLiveSeek = true;
+    clearInitialLiveSeekGuard();
+    initialLiveSeekPollTimer = window.setInterval(() => {
+      tryConsumeInitialLiveSeek();
+      if (!pendingInitialLiveSeek) clearInitialLiveSeekPoll();
+    }, INITIAL_LIVE_SEEK_POLL_MS);
+    initialLiveSeekGuardTimer = window.setTimeout(() => {
+      initialLiveSeekGuardTimer = null;
+      pendingInitialLiveSeek = false;
+      clearInitialLiveSeekPoll();
+    }, INITIAL_LIVE_SEEK_GUARD_MS);
+    // Fire the first pass immediately and kick playback in parallel; HLS events
+    // will re-enter `tryConsumeInitialLiveSeek` as soon as data is attached.
+    tryConsumeInitialLiveSeek();
+    tryPlayLiveMedia();
+  }
+
+  function tryConsumeInitialLiveSeek() {
+    if (!pendingInitialLiveSeek) return;
+    if (!isLiveStream()) {
+      pendingInitialLiveSeek = false;
+      clearInitialLiveSeekGuard();
+      return;
+    }
+    if (!seekToLiveEdge()) return;
+    /* With hls.js, keep retrying until `seekable` exists so we snap to the buffer edge, not only sync. */
+    if (hlsInstance && getSeekableEndTime() == null) return;
+    pendingInitialLiveSeek = false;
+    clearInitialLiveSeekGuard();
+  }
+
+  function syncLiveButtonUI() {
+    if (!(goLiveBtn instanceof HTMLElement)) return;
+    const live = isLiveStream();
+    goLiveBtn.hidden = !live;
+    if (!live) return;
+    const edge = getLiveEdgeTime();
+    const atLive =
+      edge == null || edge - video.currentTime <= LIVE_EDGE_AT_TOLERANCE_SEC;
+    goLiveBtn.dataset.liveAt = atLive ? "true" : "false";
+    goLiveBtn.setAttribute(
+      "data-tooltip",
+      atLive ? "Live" : "Jump to live"
+    );
+    goLiveBtn.setAttribute(
+      "aria-label",
+      atLive ? "Live" : "Jump to live"
+    );
   }
 
   const DEMO_SAMPLE_URL =
@@ -1036,7 +1330,9 @@
 
   function loadExternalEmbedIframe(kind, iframeSrc, iframeTitle, displayLabel) {
     hasCustomSource = true;
+    expectsLiveHlsPlayback = false;
     revokeBlobUrl();
+    detachHlsInstance();
     exitYoutubeMode();
     sourceKind = kind;
     player.dataset.source = kind;
@@ -1071,6 +1367,7 @@
     }
     clearAllFrameHold();
     syncFullscreenButtonUI();
+    syncLiveButtonUI();
   }
 
   function loadYouTubeFromId(videoId, displayLabel) {
@@ -1141,22 +1438,109 @@
     hasCustomSource = true;
     exitYoutubeMode();
     revokeBlobUrl();
+    detachHlsInstance();
     video.hidden = false;
     player.dataset.source = "native";
     syncPipVisibility();
-    video.src = abs;
+
+    const hls = isHlsUrl(abs);
+    expectsLiveHlsPlayback = hls;
+    const canNativeHls =
+      hls && !!video.canPlayType("application/vnd.apple.mpegurl");
+    const HlsCtor = window.Hls;
+    const useHlsJs =
+      hls && !canNativeHls && HlsCtor && typeof HlsCtor.isSupported === "function" && HlsCtor.isSupported();
+
     try {
       const host = new URL(abs).hostname;
       if (fileNameEl instanceof HTMLElement) fileNameEl.textContent = host || abs;
     } catch (_) {
       if (fileNameEl instanceof HTMLElement) fileNameEl.textContent = abs;
     }
+
+    if (useHlsJs) {
+      // The manifest may 404 briefly while FFmpeg starts muxing; retry quickly.
+      // A 10 s max wait per attempt made cold loads feel like a fixed 10 s stall.
+      const retryPolicy = {
+        default: {
+          maxTimeToFirstByteMs: 3500,
+          maxLoadTimeMs: 18_000,
+          timeoutRetry: {
+            maxNumRetry: 12,
+            retryDelayMs: 350,
+            maxRetryDelayMs: 2500,
+          },
+          errorRetry: { maxNumRetry: 30, retryDelayMs: 400, maxRetryDelayMs: 3500 },
+        },
+      };
+      const instance = new HlsCtor({
+        lowLatencyMode: true,
+        enableWorker: true,
+        // Stay one segment behind the playlist live edge instead of the default
+        // ~3-segment cushion. `maxLiveSyncPlaybackRate` nudges playback speed
+        // when we fall behind without a hard seek.
+        liveSyncDurationCount: 1,
+        liveMaxLatencyDurationCount: 10,
+        maxLiveSyncPlaybackRate: 1.2,
+        maxBufferLength: 24,
+        backBufferLength: 18,
+        manifestLoadPolicy: retryPolicy,
+        playlistLoadPolicy: retryPolicy,
+        fragLoadPolicy: retryPolicy,
+      });
+      hlsInstance = instance;
+      requestInitialLiveSeek();
+      instance.on(HlsCtor.Events.MANIFEST_PARSED, () => {
+        requestAnimationFrame(() => tryConsumeInitialLiveSeek());
+        tryPlayLiveMedia();
+        syncPreviewVideoSrc();
+        syncLiveButtonUI();
+      });
+      instance.on(HlsCtor.Events.LEVEL_UPDATED, () => {
+        tryConsumeInitialLiveSeek();
+        tryPlayLiveMedia();
+        syncLiveButtonUI();
+      });
+      if (HlsCtor.Events && HlsCtor.Events.BUFFER_APPENDED) {
+        instance.on(HlsCtor.Events.BUFFER_APPENDED, () => {
+          tryConsumeInitialLiveSeek();
+          tryPlayLiveMedia();
+          syncLiveButtonUI();
+        });
+      }
+      instance.on(HlsCtor.Events.ERROR, (_evt, data) => {
+        if (!data || !data.fatal) return;
+        if (data.type === HlsCtor.ErrorTypes.NETWORK_ERROR) {
+          instance.startLoad();
+        } else if (data.type === HlsCtor.ErrorTypes.MEDIA_ERROR) {
+          instance.recoverMediaError();
+        } else {
+          detachHlsInstance();
+          hasCustomSource = false;
+          expectsLiveHlsPlayback = false;
+          if (fileNameEl instanceof HTMLElement) {
+            fileNameEl.textContent =
+              "Live stream unavailable. The broadcaster may be offline.";
+          }
+        }
+      });
+      instance.loadSource(abs);
+      instance.attachMedia(video);
+      video.playbackRate = 1;
+      playbackRateSelect.value = "1";
+      updateTimeDisplay();
+      return;
+    }
+
+    video.src = abs;
     const onErr = () => {
       video.removeEventListener("error", onErr);
       hasCustomSource = false;
+      expectsLiveHlsPlayback = false;
       if (fileNameEl instanceof HTMLElement) {
-        fileNameEl.textContent =
-          "Could not play this URL. Try a direct MP4/WebM link, or a YouTube, Vimeo, or Twitch link.";
+        fileNameEl.textContent = hls
+          ? "Live stream unavailable. The broadcaster may be offline."
+          : "Could not play this URL. Try a direct MP4/WebM link, or a YouTube, Vimeo, or Twitch link.";
       }
     };
     video.addEventListener("error", onErr, { once: true });
@@ -1164,7 +1548,8 @@
     syncPreviewVideoSrc();
     video.playbackRate = 1;
     playbackRateSelect.value = "1";
-    video.play().catch(() => {});
+    if (hls) requestInitialLiveSeek();
+    tryPlayLiveMedia();
   }
 
   function tryLoadFromUrlString(raw) {
@@ -1204,8 +1589,10 @@
   function loadVideoFromFile(file) {
     if (!isVideoFile(file)) return;
     hasCustomSource = true;
+    expectsLiveHlsPlayback = false;
     exitYoutubeMode();
     revokeBlobUrl();
+    detachHlsInstance();
     blobUrl = URL.createObjectURL(file);
     video.src = blobUrl;
     if (fileNameEl instanceof HTMLElement) fileNameEl.textContent = file.name;
@@ -1220,8 +1607,10 @@
   function loadVideoFromNativePayload(payload) {
     if (!payload || !payload.url) return;
     hasCustomSource = true;
+    expectsLiveHlsPlayback = isHlsUrl(payload.url);
     exitYoutubeMode();
     revokeBlobUrl();
+    detachHlsInstance();
     video.src = payload.url;
     if (fileNameEl instanceof HTMLElement) {
       fileNameEl.textContent = payload.displayName || "";
@@ -1231,7 +1620,8 @@
     video.playbackRate = 1;
     playbackRateSelect.value = "1";
     syncPipVisibility();
-    video.play().catch(() => {});
+    if (expectsLiveHlsPlayback) requestInitialLiveSeek();
+    tryPlayLiveMedia();
   }
 
   /** True while the OS launch queue is still delivering file handle(s). */
@@ -1279,6 +1669,7 @@
     if (isExternalEmbedSource()) return;
     if (hasCustomSource || pendingOsFileOpen || pendingNativeInitial || blobUrl) return;
     if (video.currentSrc) return;
+    expectsLiveHlsPlayback = false;
     video.src = DEMO_SAMPLE_URL;
     if (fileNameEl instanceof HTMLElement) fileNameEl.textContent = "";
     video.load();
@@ -1303,6 +1694,12 @@
   });
 
   function syncPreviewVideoSrc() {
+    if (hlsInstance) {
+      // hls.js drives a MediaSource blob URL that only the main <video> can read.
+      previewVideo.removeAttribute("src");
+      previewVideo.load();
+      return;
+    }
     const src = video.currentSrc || video.src;
     if (!src) {
       previewVideo.removeAttribute("src");
@@ -1655,7 +2052,53 @@
   function updateTimeDisplay() {
     const cur = video.currentTime;
     const dur = video.duration;
+    const live = isLiveStream() || dur === Infinity;
+    if (live) {
+      // Prefer "elapsed-since-broadcast-start / live-duration", both computed
+      // from PROGRAM-DATE-TIME against the host-supplied `startedAt`. This is
+      // the only reading that agrees across browsers and across reloads: the
+      // raw `currentTime` value starts wherever MSE/native-HLS decided the
+      // first attached segment should map to (0 in Chrome via hls.js, the
+      // segment's wall-clock in Safari/Firefox), which was the drift you saw.
+      const elapsedMs = getLiveElapsedMs();
+      const durMs = getLiveDurationMs();
+      if (elapsedMs != null && durMs != null) {
+        timeDisplay.textContent = `${formatTime(elapsedMs / 1000)} / ${formatTime(durMs / 1000)}`;
+        return;
+      }
+      const edge = getSeekableEndTime() ?? getHlsLiveSyncTime();
+      if (edge != null && Number.isFinite(edge) && edge > 0) {
+        timeDisplay.textContent = `${formatTime(cur)} / ${formatTime(edge)}`;
+      } else {
+        timeDisplay.textContent = formatTime(cur);
+      }
+      return;
+    }
     timeDisplay.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+  }
+
+  /**
+   * While a live stream is playing, the wall-clock display needs to update at
+   * visual cadence (~60fps), not at the ~4Hz rate of the `timeupdate` event.
+   * We run a rAF loop only for live playback so paused / non-live pages don't
+   * pay the overhead. The loop self-terminates on pause/non-live.
+   */
+  let liveClockRaf = null;
+  function startLiveClock() {
+    if (liveClockRaf != null) return;
+    const step = () => {
+      liveClockRaf = null;
+      if (video.paused || !isLiveStream()) return;
+      updateTimeDisplay();
+      liveClockRaf = requestAnimationFrame(step);
+    };
+    liveClockRaf = requestAnimationFrame(step);
+  }
+  function stopLiveClock() {
+    if (liveClockRaf != null) {
+      cancelAnimationFrame(liveClockRaf);
+      liveClockRaf = null;
+    }
   }
 
   function syncProgressFromVideo() {
@@ -1824,6 +2267,34 @@
   wireFrameStepButton(frameBackBtn, -1);
   wireFrameStepButton(frameForwardBtn, 1);
 
+  if (goLiveBtn instanceof HTMLElement) {
+    goLiveBtn.addEventListener("click", () => {
+      if (!isLiveStream()) return;
+      // Treat the LIVE button as a full sync: drop whatever the player is
+      // currently loading from (which may be a stale playlist window after a
+      // pause, a long tab-hidden period, or a brief network hiccup), refetch
+      // from the newest fragment, then snap to the edge and resume playback.
+      // This is what makes the button behave the same whether we're already at
+      // the edge, a few seconds behind, or recovering from a stall.
+      if (hlsInstance) {
+        try {
+          hlsInstance.stopLoad();
+          // `startLoad(-1)` tells hls.js to pick the freshest fragment from the
+          // next manifest refresh instead of resuming at its old position.
+          hlsInstance.startLoad(-1);
+        } catch (_) {
+          /* noop: fall through to the seek path below */
+        }
+      }
+      requestInitialLiveSeek();
+      seekToLiveEdge();
+      if (video.paused) tryPlayLiveMedia();
+      syncLiveButtonUI();
+      updateTimeDisplay();
+      bumpChromeActivity();
+    });
+  }
+
   window.addEventListener(
     "pointerup",
     (e) => {
@@ -1849,6 +2320,7 @@
   video.addEventListener("timeupdate", () => {
     if (player.dataset.scrubbing !== "true") syncProgressFromVideo();
     updateTimeDisplay();
+    syncLiveButtonUI();
   });
 
   video.addEventListener("loadedmetadata", () => {
@@ -1859,12 +2331,42 @@
     syncPlaybackRateSelect();
     updateTimeDisplay();
     syncProgressFromVideo();
+    // Native HLS (Safari / hls.js not in use): jump to live edge on first load.
+    if (!hlsInstance && isLiveDuration()) {
+      requestInitialLiveSeek();
+      tryConsumeInitialLiveSeek();
+    }
+    tryConsumeInitialLiveSeek();
+    tryPlayLiveMedia();
+    syncLiveButtonUI();
   });
+
+  video.addEventListener("loadeddata", () => {
+    tryConsumeInitialLiveSeek();
+    tryPlayLiveMedia();
+    syncLiveButtonUI();
+  });
+
+  video.addEventListener("canplay", () => {
+    tryConsumeInitialLiveSeek();
+    tryPlayLiveMedia();
+    syncLiveButtonUI();
+  });
+
+  video.addEventListener("playing", () => {
+    tryConsumeInitialLiveSeek();
+    syncLiveButtonUI();
+    startLiveClock();
+  });
+
+  video.addEventListener("durationchange", syncLiveButtonUI);
+  video.addEventListener("progress", syncLiveButtonUI);
 
   video.addEventListener("play", () => {
     setState(true);
     lastMediaTime = null;
     startFramePeriodMeasure();
+    startLiveClock();
     if (webAudioVolumeRoute && webAudioCtx) {
       void webAudioCtx.resume();
       /* Pause may zero gain to flush buffered samples; restore loudness when playing again. */
@@ -1875,6 +2377,7 @@
   video.addEventListener("pause", () => {
     setState(false);
     stopFramePeriodMeasure();
+    stopLiveClock();
     /*
      * Mobile WebKit: `MediaElementAudioSourceNode` can keep playing decoded audio briefly
      * after `video.pause()`. Force the gain to zero immediately so pause feels silent.
@@ -2273,6 +2776,8 @@
 
   progress.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
+    pendingInitialLiveSeek = false;
+    clearInitialLiveSeekGuard();
     video.pause();
     player.dataset.scrubbing = "true";
     scrubPointerId = e.pointerId;
@@ -2952,7 +3457,20 @@
       exitYoutubeMode();
       revokeBlobUrl();
       hasCustomSource = false;
+      expectsLiveHlsPlayback = false;
+      clearInitialLiveSeekGuard();
+      pendingInitialLiveSeek = false;
     }
+  });
+
+  window.addEventListener("pageshow", () => {
+    if (!isLiveStream()) return;
+    requestInitialLiveSeek();
+    requestAnimationFrame(() => {
+      tryConsumeInitialLiveSeek();
+      tryPlayLiveMedia();
+    });
+    syncLiveButtonUI();
   });
 
   volumeSlider.value = String(video.volume);
@@ -2966,6 +3484,7 @@
   syncPlaybackRateSelect();
   applyZoomTransform();
   updateTimeDisplay();
+  syncLiveButtonUI();
 
   if (typeof ResizeObserver !== "undefined") {
     const ro = new ResizeObserver(() => {

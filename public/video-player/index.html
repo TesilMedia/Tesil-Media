@@ -248,6 +248,19 @@
               </button>
             </div>
 
+            <button
+              type="button"
+              class="player__btn player__btn--live"
+              id="goLive"
+              aria-label="Go to live"
+              data-tooltip="Go to live"
+              data-live-at="true"
+              hidden
+            >
+              <span class="player__live-dot" aria-hidden="true"></span>
+              <span class="player__live-label">LIVE</span>
+            </button>
+
             <div class="player__spacer"></div>
           </div>
 
@@ -332,6 +345,7 @@
       </section>
     </main>
     <div id="tooltipLayer" class="tooltip-layer" role="tooltip" hidden></div>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.18/dist/hls.min.js"></script>
     <script src="player.js"></script>
   </body>
 </html>

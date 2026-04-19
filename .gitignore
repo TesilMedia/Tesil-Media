@@ -41,3 +41,6 @@ prisma/migrations/
 public/uploads/videos/
 public/uploads/thumbnails/
 public/uploads/channel/
+
+# live HLS output (local-only)
+media/
