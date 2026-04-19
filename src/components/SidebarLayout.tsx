@@ -1,0 +1,180 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+
+import {
+  CATEGORY_META,
+  VIDEO_CATEGORIES,
+  categoryHref,
+} from "@/lib/categories";
+import { CategoryIcon } from "@/components/CategoryIcon";
+import { useMobileSidebar } from "@/components/MobileSidebarContext";
+
+function useIsLg() {
+  const [lg, setLg] = useState<boolean | null>(null);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const fn = () => setLg(mq.matches);
+    fn();
+    mq.addEventListener("change", fn);
+    return () => mq.removeEventListener("change", fn);
+  }, []);
+  return lg;
+}
+
+export type SidebarLiveChannel = {
+  id: string;
+  slug: string;
+  name: string;
+  avatarUrl: string | null;
+  stream: { viewers: number | null } | null;
+};
+
+type Props = {
+  liveChannels: SidebarLiveChannel[];
+};
+
+export function SidebarLayout({ liveChannels }: Props) {
+  const pathname = usePathname();
+  const { open, close } = useMobileSidebar();
+  const isLg = useIsLg();
+  const drawerHidden =
+    isLg !== null && !isLg && !open;
+
+  useEffect(() => {
+    close();
+  }, [pathname, close]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, close]);
+
+  useEffect(() => {
+    if (open && isLg === false) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [open, isLg]);
+
+  return (
+    <>
+      {open ? (
+        <button
+          type="button"
+          className="fixed inset-0 top-14 z-[35] bg-black/60 lg:hidden"
+          aria-label="Close navigation menu"
+          onClick={close}
+        />
+      ) : null}
+
+      <aside
+        id="main-sidebar"
+        className={`flex min-h-0 w-60 shrink-0 flex-col overflow-y-auto border-r-2 border-accent/30 bg-bg/40 px-2 py-4 backdrop-blur-sm transition-transform duration-200 ease-out fixed left-0 top-14 z-40 h-[calc(100dvh-3.5rem)] lg:static lg:top-auto lg:z-auto lg:h-full ${
+          open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
+        aria-hidden={drawerHidden}
+        inert={drawerHidden ? true : undefined}
+      >
+        <nav className="flex flex-col gap-1 px-2">
+          <SidebarLink href="/" label="Home" onNavigate={close} />
+          <SidebarLink href="/?filter=live" label="Live now" onNavigate={close} />
+          <SidebarLink href="/?filter=recent" label="Recent" onNavigate={close} />
+        </nav>
+
+        <div className="mt-6 px-2">
+          <div className="mb-2 font-display text-[12px] uppercase tracking-[0.18em] text-accent">
+            Categories
+          </div>
+          <ul className="flex flex-col gap-0.5">
+            {VIDEO_CATEGORIES.map((slug) => {
+              const meta = CATEGORY_META[slug];
+              return (
+                <li key={slug}>
+                  <Link
+                    href={categoryHref(slug)}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface hover:text-accent-blue"
+                    onClick={close}
+                  >
+                    <span
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded ${meta.badgeClass}`}
+                    >
+                      <CategoryIcon category={slug} className="h-3 w-3" />
+                    </span>
+                    <span className="flex-1 truncate">{meta.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <div className="mt-6 px-2">
+          <div className="mb-2 font-display text-[12px] uppercase tracking-[0.18em] text-accent">
+            Live channels
+          </div>
+          <ul className="flex flex-col gap-1">
+            {liveChannels.length === 0 ? (
+              <li className="px-2 py-1 text-xs text-muted">Nobody is live.</li>
+            ) : (
+              liveChannels.map((c) => (
+                <li key={c.id}>
+                  <Link
+                    href={`/c/${c.slug}`}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface hover:text-accent-blue"
+                    onClick={close}
+                  >
+                    <span className="relative inline-block h-7 w-7 shrink-0 overflow-hidden rounded-full bg-surface-2">
+                      {c.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={c.avatarUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : null}
+                    </span>
+                    <span className="flex-1 truncate">{c.name}</span>
+                    <span className="flex items-center gap-1 text-[11px] text-muted">
+                      <span className="live-pulse inline-block h-1.5 w-1.5 rounded-full bg-live" />
+                      {c.stream?.viewers?.toLocaleString() ?? 0}
+                    </span>
+                  </Link>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function SidebarLink({
+  href,
+  label,
+  onNavigate,
+}: {
+  href: string;
+  label: string;
+  onNavigate: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      className="rounded-md px-2 py-1.5 text-sm font-medium text-text hover:bg-surface hover:text-accent"
+      onClick={onNavigate}
+    >
+      {label}
+    </Link>
+  );
+}
