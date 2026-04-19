@@ -126,6 +126,7 @@ export default async function SearchPage({
                 views={v.views}
                 createdAt={v.createdAt}
                 rating={v.rating}
+                sourceUrl={v.sourceUrl}
                 channel={{
                   slug: v.channel.slug,
                   name: v.channel.name,

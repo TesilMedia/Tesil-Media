@@ -136,6 +136,7 @@ export default async function CategoryPage({
                 views={v.views}
                 createdAt={v.createdAt}
                 rating={v.rating}
+                sourceUrl={v.sourceUrl}
                 channel={{
                   slug: v.channel.slug,
                   name: v.channel.name,

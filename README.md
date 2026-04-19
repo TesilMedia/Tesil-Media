@@ -58,7 +58,7 @@ password: password123
 .
 ├── prisma/
 │   ├── schema.prisma          # User, Channel, Video, LiveStream (+ Auth.js tables)
-│   └── seed.ts                # Demo channels, videos, and live streams
+│   └── seed.ts                # Demo user only (no channels; sign up or upload to add content)
 ├── public/
 │   └── video-player/          # Copy of the Tesil Video Player (vanilla JS + HTML + CSS)
 │       ├── embed.html         # Minimal player shell (this is what Watch/Live pages iframe)
@@ -122,10 +122,12 @@ So "going live" in this MVP is just: `LiveStream { isLive: true, streamUrl: "...
 | Command              | Purpose                                   |
 | -------------------- | ----------------------------------------- |
 | `npm run dev`        | Dev server at <http://localhost:3000>     |
+| `npm run dev:media`  | OBS ingest sidecar (RTMP -> HLS)          |
+| `npm run dev:all`    | Run Next + OBS ingest together            |
 | `npm run build`      | Production build                          |
 | `npm run start`      | Run the production build                  |
 | `npm run db:push`    | Sync Prisma schema to SQLite              |
-| `npm run db:seed`    | Reset & reseed the DB with demo content   |
+| `npm run db:seed`    | Reset & reseed the DB with a demo user account only |
 | `npm run db:migrate-categories` | One-shot: coerce legacy free-text `category` values to canonical slugs (non-destructive) |
 | `npm run db:studio`  | Open Prisma Studio (DB browser)           |
 | `npm run lint`       | ESLint                                    |
@@ -138,7 +140,22 @@ Copy `.env.example` to `.env` and adjust:
 DATABASE_URL="file:./dev.db"
 AUTH_SECRET="<32+ random chars>"
 NEXTAUTH_URL="http://localhost:3000"
+STREAM_HOOK_SECRET="<32+ random chars>"
 ```
+
+OBS ingest also requires FFmpeg on your PATH. On Windows:
+
+```powershell
+winget install Gyan.FFmpeg
+```
+
+Then run `npm run dev:all` and configure OBS:
+
+- Service: `Custom`
+- Server: `rtmp://localhost:1935/live`
+- Stream key: paste the full value from **/me** — it must look like `<your-channel-slug>?key=<secret>`. (Node Media Server reads the secret from that query string; using only the slug will fail validation.)
+
+If `next dev` is not on port 3000 (the console will show the real URL), set `NEXT_APP_URL` in `.env` to that same base URL so ingest hooks can reach your app. Freeing port 3000 (or stopping other `next dev` instances) usually keeps the default `http://localhost:3000` and avoids the extra variable.
 
 Generate a secret:
 

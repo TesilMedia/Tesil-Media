@@ -12,6 +12,7 @@ import { formatDuration, formatViews } from "@/lib/format";
 import { ChannelEditCard } from "./ChannelEditCard";
 import { ContentFilterCard } from "./ContentFilterCard";
 import { DeleteVideoButton } from "./DeleteVideoButton";
+import { GoLiveCard } from "./GoLiveCard";
 import { RatingBadge } from "@/components/RatingBadge";
 import { parseHiddenRatings } from "@/lib/ratings";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,18 @@ export default async function ProfilePage() {
 
   const channel = await ensureChannelForUser(session.user.id);
   if (!channel) redirect(STALE_SESSION_SIGN_OUT_URL);
+  const stream = await prisma.liveStream.upsert({
+    where: { channelId: channel.id },
+    update: {},
+    create: {
+      channelId: channel.id,
+      title: `${channel.name} live`,
+      streamUrl: `/hls/${channel.slug}/index.m3u8`,
+      isLive: false,
+    },
+    select: { isLive: true, streamKey: true },
+  });
+
   const [videos, totalViews, userPrefs] = await Promise.all([
     prisma.video.findMany({
       where: { channelId: channel.id },
@@ -93,6 +106,11 @@ export default async function ProfilePage() {
               followers: channel.followers,
             }}
             stats={{ videos: videos.length, totalViews }}
+          />
+          <GoLiveCard
+            slug={channel.slug}
+            isLive={stream.isLive}
+            hasStreamKey={Boolean(stream.streamKey)}
           />
           <ContentFilterCard initialHidden={hiddenRatings} />
         </section>

@@ -58,8 +58,7 @@ export default async function HomePage() {
         </div>
         {videos.length === 0 ? (
           <p className="text-muted">
-            No videos yet. Run <code className="rounded bg-surface px-1.5 py-0.5">npm run db:seed</code>{" "}
-            to populate demo content.
+            No videos yet. Sign in and upload a video to see it here.
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -73,6 +72,7 @@ export default async function HomePage() {
                 views={v.views}
                 createdAt={v.createdAt}
                 rating={v.rating}
+                sourceUrl={v.sourceUrl}
                 channel={{
                   slug: v.channel.slug,
                   name: v.channel.name,

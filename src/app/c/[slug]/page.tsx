@@ -140,6 +140,7 @@ export default async function ChannelPage({
                   views={v.views}
                   createdAt={v.createdAt}
                   rating={v.rating}
+                  sourceUrl={v.sourceUrl}
                   channel={{
                     slug: channel.slug,
                     name: channel.name,

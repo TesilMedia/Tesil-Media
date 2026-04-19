@@ -2,6 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  async rewrites() {
+    return [
+      {
+        source: "/hls/:path*",
+        destination: "http://localhost:8000/live/:path*",
+      },
+    ];
+  },
   experimental: {
     // Next clones the incoming body with a 10MB default cap; larger uploads are
     // truncated and multipart parsing fails. This applies to route handlers too.

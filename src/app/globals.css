@@ -60,7 +60,7 @@ h1,
 h2,
 h3 {
   font-family: var(--font-display), Impact, "Bebas Neue", system-ui, sans-serif;
-  letter-spacing: 0.01em;
+  letter-spacing: calc(0.01em + 1px);
 }
 
 /* Retro-tinted scrollbars */
@@ -87,6 +87,11 @@ h3 {
 }
 
 @layer utilities {
+  /* Righteous reads tight at small sizes; a hair of tracking matches the retro UI */
+  .font-display {
+    letter-spacing: 1px;
+  }
+
   .live-pulse {
     animation: live-pulse 1.6s ease-in-out infinite;
   }

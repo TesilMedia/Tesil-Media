@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { MobileNavToggle } from "@/components/MobileNavToggle";
+import { TopNavSearchInput } from "@/components/TopNavSearchInput";
 
 type Props = {
   user: {
@@ -17,14 +18,14 @@ type Props = {
 
 export function TopNav({ user, channel }: Props) {
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b-2 border-accent/40 bg-bg/85 px-[8px] backdrop-blur supports-[backdrop-filter]:bg-bg/70 md:gap-4">
-      <div className="flex shrink-0 items-center gap-2">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-[8px] border-b-2 border-accent/40 bg-bg/85 px-[8px] backdrop-blur supports-[backdrop-filter]:bg-bg/70">
+      <div className="flex shrink-0 items-center gap-[8px]">
         <MobileNavToggle />
         <Link
           href="/"
-          className="flex shrink-0 items-center font-display tracking-wide"
+          className="inline-flex h-10 shrink-0 items-center justify-center font-display tracking-wide md:h-9"
         >
-          <span className="retro-gradient-text text-[20px] leading-none">
+          <span className="retro-gradient-text text-[36px] leading-none">
             TESIL
           </span>
         </Link>
@@ -35,12 +36,7 @@ export function TopNav({ user, channel }: Props) {
         method="GET"
         className="mx-auto flex min-w-0 flex-1 max-w-xl items-center justify-center"
       >
-        <input
-          type="search"
-          name="q"
-          placeholder="Search channels and videos…"
-          className="h-10 min-w-0 w-full rounded-full border-2 border-border bg-surface px-3 py-1.5 text-base leading-snug text-text outline-none placeholder:text-muted focus:border-accent sm:px-4 md:h-9 md:text-sm lg:rounded-l-full lg:rounded-r-none"
-        />
+        <TopNavSearchInput />
         <button
           type="submit"
           className="hidden h-10 shrink-0 items-center justify-center rounded-r-full border-2 border-l-0 border-border bg-surface-2 px-3 py-1.5 text-base font-medium leading-snug text-muted hover:bg-accent hover:text-bg sm:px-4 md:h-9 md:text-sm lg:flex"
@@ -49,12 +45,12 @@ export function TopNav({ user, channel }: Props) {
         </button>
       </form>
 
-      <div className="flex min-w-0 items-center justify-end gap-2">
+      <div className="flex min-w-0 items-center justify-end gap-[8px]">
         {user && channel ? (
-          <div className="flex min-w-0 max-w-[min(100%,14rem)] items-center gap-2 sm:max-w-[min(100%,18rem)]">
+          <div className="flex min-w-0 max-w-[min(100%,14rem)] items-center gap-[8px] sm:max-w-[min(100%,18rem)]">
             <Link
               href="/me"
-              className="inline-flex h-9 w-9 shrink-0 overflow-hidden rounded-full border border-border bg-surface-2 ring-1 ring-border/40 hover:ring-accent/50"
+              className="inline-flex h-10 w-10 shrink-0 overflow-hidden rounded-full border border-border bg-surface-2 ring-1 ring-border/40 hover:ring-accent/50 md:h-9 md:w-9"
               title={`${channel.name} — your channel`}
             >
               {channel.avatarUrl ? (
@@ -77,7 +73,7 @@ export function TopNav({ user, channel }: Props) {
         ) : user ? (
           <Link
             href="/me"
-            className="text-sm text-muted hover:text-accent-blue"
+            className="inline-flex h-10 max-w-full min-w-0 items-center truncate px-1 text-sm text-muted hover:text-accent-blue md:h-9"
           >
             {user.name ?? user.email}
           </Link>
@@ -85,13 +81,13 @@ export function TopNav({ user, channel }: Props) {
           <>
             <Link
               href="/signin"
-              className="rounded-full border-2 border-accent-blue/70 bg-surface px-3 py-1.5 text-sm font-medium text-accent-blue hover:bg-accent-blue hover:text-bg"
+              className="inline-flex h-10 items-center justify-center rounded-full border-2 border-accent-blue/70 bg-surface px-3 text-sm font-medium text-accent-blue hover:bg-accent-blue hover:text-bg md:h-9"
             >
               Sign in
             </Link>
             <Link
               href="/signup"
-              className="rounded-full bg-accent px-3 py-1.5 text-sm font-semibold uppercase tracking-wide text-bg shadow-retro-sm hover:bg-accent-hover"
+              className="inline-flex h-10 items-center justify-center rounded-full bg-accent px-3 text-sm font-semibold uppercase tracking-wide text-bg shadow-retro-sm hover:bg-accent-hover md:h-9"
             >
               Sign up
             </Link>

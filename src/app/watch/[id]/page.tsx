@@ -199,6 +199,7 @@ export default async function WatchPage({
                 views={v.views}
                 createdAt={v.createdAt}
                 rating={v.rating}
+                sourceUrl={v.sourceUrl}
                 channel={{
                   slug: v.channel.slug,
                   name: v.channel.name,

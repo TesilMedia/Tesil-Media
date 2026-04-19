@@ -27,6 +27,10 @@ export default async function LivePage({
   if (!channel || !channel.stream) notFound();
 
   const { stream } = channel;
+  const playbackSrc =
+    stream.streamKey && stream.isLive
+      ? `/hls/${channel.slug}/index.m3u8`
+      : stream.streamUrl;
   const hidden = await getViewerHiddenRatings();
   const filtered =
     isContentRating(stream.rating) &&
@@ -68,7 +72,7 @@ export default async function LivePage({
 
   return (
     <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-6">
-      <VideoPlayer src={stream.streamUrl} title={stream.title} />
+      <VideoPlayer src={playbackSrc} title={stream.title} />
 
       <div className="mt-4 flex items-start justify-between gap-4 border-b border-border pb-4">
         <div>
