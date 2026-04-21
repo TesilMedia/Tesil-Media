@@ -37,6 +37,7 @@ const config: Config = {
         "danger-bg": "var(--color-danger-bg)",
         "danger-border": "var(--color-danger-border)",
         "danger-hover-bg": "var(--color-danger-hover-bg)",
+
       },
       fontFamily: {
         sans: [

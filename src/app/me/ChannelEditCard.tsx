@@ -121,7 +121,7 @@ export function ChannelEditCard({ channel, stats }: Props) {
 
       <div className="rounded-b-lg px-4 pb-4">
         <div className="relative z-10 -mt-8 mb-3 flex items-end gap-3">
-          <div className="relative z-10 h-16 w-16 shrink-0 overflow-hidden rounded-full border-4 border-surface bg-surface-2 shadow-lg ring-1 ring-border/60">
+          <div className="relative z-10 h-16 w-16 shrink-0 overflow-hidden rounded-full bg-surface-2 shadow-lg">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img

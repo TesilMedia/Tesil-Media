@@ -72,7 +72,7 @@ export function SidebarLayout({ liveChannels }: Props) {
       {open ? (
         <button
           type="button"
-          className="fixed inset-0 top-14 z-[35] bg-black/60 lg:hidden"
+          className="fixed inset-0 top-14 z-[35] bg-transparent lg:hidden"
           aria-label="Close navigation menu"
           onClick={close}
         />
@@ -80,7 +80,7 @@ export function SidebarLayout({ liveChannels }: Props) {
 
       <aside
         id="main-sidebar"
-        className={`retro-tricolor-divider-r flex min-h-0 w-60 shrink-0 flex-col overflow-y-auto bg-bg/40 pl-2 pr-[14px] py-4 backdrop-blur-sm transition-transform duration-200 ease-out fixed left-0 top-14 z-40 h-[calc(100dvh-3.5rem)] lg:static lg:top-auto lg:z-auto lg:h-full ${
+        className={`retro-tricolor-divider-r flex min-h-0 w-60 shrink-0 flex-col overflow-y-auto bg-[color-mix(in_srgb,var(--color-bg)_90%,transparent)] backdrop-blur-sm pl-2 pr-[14px] py-4 transition-transform duration-200 ease-out fixed left-0 top-14 z-40 h-[calc(100dvh-3.5rem)] lg:static lg:top-auto lg:z-auto lg:h-full ${
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
         aria-hidden={drawerHidden}

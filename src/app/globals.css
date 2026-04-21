@@ -86,6 +86,38 @@
   --color-shadow-retro: #1e2a2d;
 }
 
+/* Content rating pills — flat solid fills; identical in light and dark. */
+:root,
+.theme-light,
+.theme-dark {
+  --rating-badge-fg: #ffffff;
+  --rating-pg-bg: #48c9b8;
+  --rating-pg13-bg: #308695;
+  --rating-r-bg: #e29e4b;
+  --rating-x-bg: #d5586a;
+}
+
+@layer components {
+  .rating-pill-pg,
+  .rating-pill-pg13,
+  .rating-pill-r,
+  .rating-pill-x {
+    color: var(--rating-badge-fg);
+  }
+  .rating-pill-pg {
+    background-color: var(--rating-pg-bg);
+  }
+  .rating-pill-pg13 {
+    background-color: var(--rating-pg13-bg);
+  }
+  .rating-pill-r {
+    background-color: var(--rating-r-bg);
+  }
+  .rating-pill-x {
+    background-color: var(--rating-x-bg);
+  }
+}
+
 html,
 body {
   background-color: var(--color-bg);
@@ -197,13 +229,21 @@ h3 {
     box-shadow: inset 0 0 0 1px rgba(236, 231, 217, 0.25),
       0 2px 0 0 rgba(30, 42, 45, 0.9);
   }
+}
 
-  /* -------------------------------------------------------------------------
-     Tricolor dividers — hard blue/orange/red bands used to break up sections.
-     -b / -r / -t / -l are one-sided dividers implemented with a pseudo-element
-     so they sit cleanly on top of any background without fighting borders.
-     ------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------
+   Tricolor dividers — hard blue/orange/red bands used to break up sections.
+   -b / -r / -t / -l are one-sided dividers implemented with a pseudo-element
+   so they sit cleanly on top of any background without fighting borders.
 
+   Declared in the `components` layer (not `utilities`) so that Tailwind's
+   positioning utilities like `fixed`, `sticky`, and `absolute` can still
+   override the fallback `position: relative` below. Otherwise a same-
+   specificity collision would pin elements like the mobile sidebar into
+   `position: relative`, breaking the responsive layout.
+   ------------------------------------------------------------------------- */
+
+@layer components {
   .retro-tricolor-divider-b,
   .retro-tricolor-divider-t,
   .retro-tricolor-divider-r,
@@ -211,7 +251,9 @@ h3 {
   .retro-tricolor-frame {
     position: relative;
   }
+}
 
+@layer utilities {
   .retro-tricolor-divider-b::after,
   .retro-tricolor-divider-t::after {
     content: "";

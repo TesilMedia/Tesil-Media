@@ -53,7 +53,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border-2 border-border bg-surface text-text hover:bg-surface-2 md:h-9 md:w-9"
+      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-border bg-surface text-text hover:bg-surface-2 md:h-9 md:w-9"
       aria-label={label}
       title={label}
     >

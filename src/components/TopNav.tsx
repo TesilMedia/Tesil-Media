@@ -32,19 +32,7 @@ export function TopNav({ user, channel }: Props) {
         </Link>
       </div>
 
-      <form
-        action="/search"
-        method="GET"
-        className="mx-auto flex min-w-0 flex-1 max-w-xl items-center justify-center"
-      >
-        <TopNavSearchInput />
-        <button
-          type="submit"
-          className="hidden h-10 shrink-0 items-center justify-center rounded-r-full border-2 border-l-0 border-border bg-surface-2 px-3 py-1.5 text-base font-medium leading-snug text-muted transition-colors hover:bg-surface hover:text-text sm:px-4 md:h-9 md:text-sm lg:flex"
-        >
-          Search
-        </button>
-      </form>
+      <TopNavSearchInput />
 
       <div className="flex min-w-0 items-center justify-end gap-[8px]">
         <ThemeToggle />
@@ -52,7 +40,7 @@ export function TopNav({ user, channel }: Props) {
           <div className="flex min-w-0 max-w-[min(100%,14rem)] items-center gap-[8px] sm:max-w-[min(100%,18rem)]">
             <Link
               href="/me"
-              className="inline-flex h-10 w-10 shrink-0 overflow-hidden rounded-full border border-border bg-surface-2 ring-1 ring-border/40 hover:ring-accent/50 md:h-9 md:w-9"
+              className="inline-flex h-10 w-10 shrink-0 overflow-hidden rounded-full bg-surface-2 outline-none focus-visible:ring-2 focus-visible:ring-border md:h-9 md:w-9"
               title={`${channel.name} — your channel`}
             >
               {channel.avatarUrl ? (
@@ -80,20 +68,22 @@ export function TopNav({ user, channel }: Props) {
             {user.name ?? user.email}
           </Link>
         ) : (
-          <>
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <Link
               href="/signin"
-              className="inline-flex h-10 items-center justify-center rounded-full bg-accent-blue px-3 text-sm font-semibold text-white shadow-retro-sm hover:bg-accent-blue-hover md:h-9"
+              title="Sign in"
+              className="inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-blue px-2.5 text-xs font-semibold text-white shadow-retro-sm hover:bg-accent-blue-hover sm:px-3 sm:text-sm md:h-9"
             >
-              Sign In
+              Sign in
             </Link>
             <Link
               href="/signup"
-              className="inline-flex h-10 items-center justify-center rounded-full bg-accent px-3 text-sm font-semibold text-white shadow-retro-sm hover:bg-accent-hover md:h-9"
+              title="Sign up"
+              className="inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent px-2.5 text-xs font-semibold text-white shadow-retro-sm hover:bg-accent-hover sm:px-3 sm:text-sm md:h-9"
             >
-              Sign Up
+              Sign up
             </Link>
-          </>
+          </div>
         )}
       </div>
     </header>

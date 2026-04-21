@@ -37,6 +37,23 @@ const TOUCH_MOVE_PREVIEW_PX = 14;
 // Touch: hold still this long on the thumb to start preview when the device can’t hover.
 const TOUCH_HOLD_PREVIEW_MS = 380;
 
+/** Only one card preview (hover or touch) at a time — avoids many muted videos on mobile scroll. */
+type PreviewLeaseRelease = () => void;
+let activePreviewRelease: PreviewLeaseRelease | null = null;
+
+function takePreviewLease(release: PreviewLeaseRelease) {
+  if (activePreviewRelease && activePreviewRelease !== release) {
+    activePreviewRelease();
+  }
+  activePreviewRelease = release;
+}
+
+function releasePreviewLease(release: PreviewLeaseRelease) {
+  if (activePreviewRelease === release) {
+    activePreviewRelease = null;
+  }
+}
+
 export function VideoCard(props: VideoCardProps) {
   const previewSrc = getPreviewableSrc(props.sourceUrl);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -51,12 +68,38 @@ export function VideoCard(props: VideoCardProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
 
+  /** Stable per mount: used with global lease so only one preview plays app-wide. */
+  const previewLeaseReleaseRef = useRef<PreviewLeaseRelease | null>(null);
+  if (!previewLeaseReleaseRef.current) {
+    previewLeaseReleaseRef.current = () => {
+      const self = previewLeaseReleaseRef.current;
+      if (!self) return;
+      releasePreviewLease(self);
+      if (hoverTimerRef.current) {
+        clearTimeout(hoverTimerRef.current);
+        hoverTimerRef.current = null;
+      }
+      setShowPreview(false);
+      setPreviewReady(false);
+      const v = videoRef.current;
+      if (v) {
+        try {
+          v.pause();
+          v.currentTime = 0;
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }
+
   /** Touch scroll/hold preview — always when we have a file URL (works with pointer-hover too). */
   const useTouchPreview = Boolean(previewSrc);
 
   useEffect(() => {
     return () => {
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      previewLeaseReleaseRef.current?.();
     };
   }, []);
 
@@ -64,6 +107,7 @@ export function VideoCard(props: VideoCardProps) {
     if (!previewSrc) return;
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
     hoverTimerRef.current = window.setTimeout(() => {
+      takePreviewLease(previewLeaseReleaseRef.current!);
       setShowPreview(true);
     }, HOVER_DELAY_MS);
   };
@@ -74,25 +118,12 @@ export function VideoCard(props: VideoCardProps) {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
+    takePreviewLease(previewLeaseReleaseRef.current!);
     setShowPreview(true);
   };
 
   const stopPreview = () => {
-    if (hoverTimerRef.current) {
-      clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
-    }
-    setShowPreview(false);
-    setPreviewReady(false);
-    const v = videoRef.current;
-    if (v) {
-      try {
-        v.pause();
-        v.currentTime = 0;
-      } catch {
-        // ignore
-      }
-    }
+    previewLeaseReleaseRef.current?.();
   };
 
   const handleThumbTouchStart = (e: ReactTouchEvent<HTMLAnchorElement>) => {
@@ -165,7 +196,7 @@ export function VideoCard(props: VideoCardProps) {
   };
 
   const thumbClasses =
-    "relative block aspect-video touch-manipulation overflow-hidden rounded-lg bg-surface";
+    "relative block aspect-video touch-manipulation touch-callout-none overflow-hidden rounded-lg bg-surface";
 
   const thumbnailVisual = (
     <>
@@ -175,6 +206,7 @@ export function VideoCard(props: VideoCardProps) {
           src={props.thumbnail}
           alt=""
           className="h-full w-full object-cover transition group-hover:scale-[1.02]"
+          draggable={false}
           loading="lazy"
         />
       ) : (
@@ -225,7 +257,10 @@ export function VideoCard(props: VideoCardProps) {
   };
 
   return (
-    <article className="group flex flex-col gap-2">
+    <article
+      className="group flex touch-callout-none flex-col gap-2"
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <Link
         href={`/watch/${props.id}`}
         className={thumbClasses}

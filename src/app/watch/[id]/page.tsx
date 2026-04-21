@@ -117,18 +117,6 @@ export default async function WatchPage({
 
   return (
     <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-6">
-      {filtered && overrideFilter ? (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-          <span className="flex items-center gap-2">
-            <RatingBadge rating={video.rating} size="sm" />
-            This video is hidden by your content filter. You&rsquo;re viewing
-            it with the filter overridden.
-          </span>
-          <Link href="/me" className="underline hover:text-amber-100">
-            Update filter
-          </Link>
-        </div>
-      ) : null}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
           <VideoPlayer src={video.sourceUrl} title={video.title} />

@@ -30,9 +30,11 @@ export function VideoPlayer({
       : typeof liveStartedAt === "string" && liveStartedAt
         ? liveStartedAt
         : null;
-  const iframeSrc = startedAtIso
-    ? `/video-player/embed.html?src=${encodeURIComponent(src)}&startedAt=${encodeURIComponent(startedAtIso)}`
-    : `/video-player/embed.html?src=${encodeURIComponent(src)}`;
+  const base =
+    startedAtIso != null
+      ? `/video-player/embed.html?src=${encodeURIComponent(src)}&startedAt=${encodeURIComponent(startedAtIso)}`
+      : `/video-player/embed.html?src=${encodeURIComponent(src)}`;
+  const iframeSrc = `${base}&autoplay=1`;
   return (
     <div
       className={`relative w-full overflow-hidden rounded-lg bg-black ${

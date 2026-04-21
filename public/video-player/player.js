@@ -64,6 +64,25 @@
     const t = Date.parse(raw);
     return Number.isFinite(t) && t > 0 ? t : null;
   })();
+  const startupAutoplay = ["1", "true", "yes"].includes(
+    String(startupQuery.get("autoplay") || "").toLowerCase()
+  );
+
+  /**
+   * When false (typical phones / touch-first tablets), we do not mute+retry on
+   * failed `play()` — mobile autoplay policies reject audible playback anyway,
+   * and forcing mute felt like the app was silencing the user. Desktop keeps
+   * mute fallback so autoplay can still start without a tap.
+   */
+  function autoplayMuteFallbackOk() {
+    try {
+      if (window.matchMedia("(pointer: coarse)").matches) return false;
+      if (window.matchMedia("(hover: none)").matches) return false;
+    } catch (_) {
+      /* matchMedia unavailable */
+    }
+    return true;
+  }
 
   function applyEmbedMode() {
     if (!embedModeRequested) return;
@@ -242,15 +261,22 @@
   /**
    * Autoplay policies across browsers are inconsistent: Chrome refuses audible
    * autoplay without a user gesture, Safari is more lenient when the tab is
-   * visible, Firefox varies by profile. The only path that works everywhere
-   * (including after a reload) is "play muted, then let the user unmute". We
-   * retry once muted on rejection so live streams reliably auto-start.
+   * visible, Firefox varies by profile. Desktop/tablet-with-mouse: retry once
+   * muted on rejection so playback can start. Touch-primary viewports: skip
+   * that for VOD so we do not surprise-mute uploads; live HLS still passes
+   * `{ live: true }` so streams can start muted when the OS requires it.
    */
-  function tryPlayLiveMedia() {
-    if (!isLiveStream()) return;
+  /**
+   * @param {{ live?: boolean }} [opts] Pass `{ live: true }` for HLS/live so
+   * mobile can still start the stream muted when the OS blocks audible autoplay.
+   */
+  function attemptPlayWithAutoplayMuteFallback(opts) {
+    const allowMuteRetry =
+      opts && opts.live === true ? true : autoplayMuteFallbackOk();
     const p = video.play();
     if (p && typeof p.catch === "function") {
       p.catch(() => {
+        if (!allowMuteRetry) return;
         if (!video.muted) {
           video.muted = true;
           setMutedUI();
@@ -259,6 +285,35 @@
         }
       });
     }
+  }
+
+  function tryPlayLiveMedia() {
+    if (!isLiveStream()) return;
+    attemptPlayWithAutoplayMuteFallback({ live: true });
+  }
+
+  /** Progressive / finite-duration native sources (embed `?autoplay=1`). */
+  function scheduleVodAutoplayWhenReady() {
+    if (!startupAutoplay) return;
+    if (isExternalEmbedSource()) return;
+    if (isLiveStream()) return;
+    let fired = false;
+    const run = () => {
+      if (fired) return;
+      fired = true;
+      attemptPlayWithAutoplayMuteFallback();
+      try {
+        setState(!video.paused);
+      } catch (_) {
+        /* same-tick init edge */
+      }
+    };
+    if (video.readyState >= 3) {
+      queueMicrotask(run);
+      return;
+    }
+    video.addEventListener("canplay", run, { once: true });
+    video.addEventListener("loadeddata", run, { once: true });
   }
 
   function seekToLiveEdge() {
@@ -774,6 +829,11 @@
   const FALLBACK_FRAME_PERIOD = 1 / 30;
   /** Hold-to-repeat only starts after this many ms so quick taps stay single-step. */
   const FRAME_HOLD_REPEAT_DELAY_MS = 300;
+  /**
+   * Touch pointers: extra wait before frame-step hold-repeat starts, on top of
+   * {@link FRAME_HOLD_REPEAT_DELAY_MS} (avoids accidental rapid stepping on mobile).
+   */
+  const FRAME_POINTER_HOLD_REPEAT_EXTRA_MS_TOUCH = 300;
   /** After the initial delay, zoom / playback-rate keys and buttons repeat at this interval. */
   const CHROME_HOLD_INTERVAL_MS = 100;
 
@@ -921,8 +981,12 @@
     else frameKeyHoldTimerForward = tid;
   }
 
-  function armPointerFrameHoldRepeat(direction) {
+  function armPointerFrameHoldRepeat(direction, delayMs) {
     disarmPointerFrameHoldRepeat(direction);
+    const delay =
+      typeof delayMs === "number" && Number.isFinite(delayMs)
+        ? delayMs
+        : FRAME_HOLD_REPEAT_DELAY_MS;
     const tid = window.setTimeout(() => {
       if (direction === -1) {
         framePointerHoldTimerBack = null;
@@ -934,7 +998,7 @@
         framePointerHoldRepeatReadyForward = true;
       }
       stepByFrame(direction);
-    }, FRAME_HOLD_REPEAT_DELAY_MS);
+    }, delay);
     if (direction === -1) framePointerHoldTimerBack = tid;
     else framePointerHoldTimerForward = tid;
   }
@@ -1376,6 +1440,10 @@
       modestbranding: "1",
       playsinline: "1",
     });
+    if (startupAutoplay) {
+      params.set("autoplay", "1");
+      if (autoplayMuteFallbackOk()) params.set("mute", "1");
+    }
     const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(
       videoId
     )}?${params}`;
@@ -1393,6 +1461,10 @@
       autopause: "0",
       playsinline: "1",
     });
+    if (startupAutoplay) {
+      params.set("autoplay", "1");
+      if (autoplayMuteFallbackOk()) params.set("muted", "1");
+    }
     const src = `https://player.vimeo.com/video/${encodeURIComponent(videoId)}?${params}`;
     loadExternalEmbedIframe(
       "vimeo",
@@ -1417,6 +1489,10 @@
     if (target.kind === "video") u.searchParams.set("video", target.video);
     else if (target.kind === "channel") u.searchParams.set("channel", target.channel);
     else u.searchParams.set("clip", target.clip);
+    if (startupAutoplay) {
+      u.searchParams.set("autoplay", "true");
+      if (autoplayMuteFallbackOk()) u.searchParams.set("muted", "true");
+    }
     const label =
       displayLabel ||
       (target.kind === "video"
@@ -1550,6 +1626,7 @@
     playbackRateSelect.value = "1";
     if (hls) requestInitialLiveSeek();
     tryPlayLiveMedia();
+    scheduleVodAutoplayWhenReady();
   }
 
   function tryLoadFromUrlString(raw) {
@@ -1622,6 +1699,7 @@
     syncPipVisibility();
     if (expectsLiveHlsPlayback) requestInitialLiveSeek();
     tryPlayLiveMedia();
+    scheduleVodAutoplayWhenReady();
   }
 
   /** True while the OS launch queue is still delivering file handle(s). */
@@ -2229,6 +2307,13 @@
   wireHeldChromeButton(rateDownBtn, () => nudgePlaybackRate(-1));
   wireHeldChromeButton(rateUpBtn, () => nudgePlaybackRate(1));
 
+  function targetIsFrameStepControl(node) {
+    if (!(node instanceof Node)) return false;
+    if (frameBackBtn instanceof Node && frameBackBtn.contains(node)) return true;
+    if (frameForwardBtn instanceof Node && frameForwardBtn.contains(node)) return true;
+    return false;
+  }
+
   function wireFrameStepButton(btn, direction) {
     if (!(btn instanceof HTMLElement)) return;
     btn.addEventListener("pointerdown", (e) => {
@@ -2246,7 +2331,11 @@
         framePointerHeldForward = true;
         framePointerHoldRepeatReadyForward = false;
       }
-      armPointerFrameHoldRepeat(direction);
+      const holdDelayMs =
+        e.pointerType === "touch"
+          ? FRAME_HOLD_REPEAT_DELAY_MS + FRAME_POINTER_HOLD_REPEAT_EXTRA_MS_TOUCH
+          : FRAME_HOLD_REPEAT_DELAY_MS;
+      armPointerFrameHoldRepeat(direction, holdDelayMs);
       stepByFrame(direction);
     });
     btn.addEventListener("click", (e) => {
@@ -2262,10 +2351,22 @@
       else framePointerHeldForward = false;
       bumpChromeActivity();
     });
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === " " || e.key === "Enter") lastFrameStepViaPointer = false;
+    });
   }
 
   wireFrameStepButton(frameBackBtn, -1);
   wireFrameStepButton(frameForwardBtn, 1);
+
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (targetIsFrameStepControl(e.target)) return;
+      lastFrameStepViaPointer = false;
+    },
+    true
+  );
 
   if (goLiveBtn instanceof HTMLElement) {
     goLiveBtn.addEventListener("click", () => {
@@ -2304,8 +2405,12 @@
       framePointerHeldBack = false;
       framePointerHeldForward = false;
       disarmAllChromePointerHolds();
+      // Do not clear `lastFrameStepViaPointer` here (or in rAF): on mobile WebKit the next
+      // animation frame often runs before the synthesized `click`, so the click handler
+      // would see a false flag and `stepByFrame` twice per tap. The flag is cleared in the
+      // frame button `click` handler when suppressing the duplicate; stale state is reset
+      // via `pointerdown` elsewhere and Space/Enter on the buttons (see below).
       requestAnimationFrame(() => {
-        lastFrameStepViaPointer = false;
         bumpChromeActivity();
       });
     },
