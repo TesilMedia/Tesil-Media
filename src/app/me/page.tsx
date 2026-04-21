@@ -60,7 +60,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="mx-auto w-full max-w-[1400px] px-4 py-8 lg:px-6">
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-border pb-4">
+      <header className="retro-tricolor-divider-b retro-tricolor-divider-caps mb-6 flex flex-wrap items-end justify-between gap-3 pb-4">
         <div>
           <h1 className="text-2xl font-semibold">Your channel</h1>
           <p className="text-sm text-muted">
@@ -73,20 +73,20 @@ export default async function ProfilePage() {
         <div className="flex items-center gap-2">
           <Link
             href={`/c/${channel.slug}`}
-            className="rounded-full border border-border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2"
+            className="rounded-full bg-accent-blue px-3 py-1.5 text-sm font-medium text-white shadow-retro-sm transition-colors hover:bg-accent-blue-hover active:brightness-95"
           >
             View public page
           </Link>
           <Link
             href="/upload"
-            className="rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-bg hover:bg-accent-hover"
+            className="rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-on-accent shadow-retro-sm transition-colors hover:bg-accent-hover active:brightness-95"
           >
             Upload video
           </Link>
           <form action={signOutFromProfile}>
             <button
               type="submit"
-              className="rounded-full border border-border bg-surface px-3 py-1.5 text-sm text-muted hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-200"
+              className="rounded-full bg-accent-red px-3 py-1.5 text-sm font-medium text-white shadow-retro-sm transition-colors hover:bg-accent-red-hover active:brightness-95"
             >
               Sign out
             </button>
@@ -130,7 +130,7 @@ export default async function ProfilePage() {
               </p>
               <Link
                 href="/upload"
-                className="inline-block rounded-full bg-accent px-4 py-2 text-sm font-semibold text-bg hover:bg-accent-hover"
+                className="inline-block rounded-full bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover"
               >
                 Upload your first video
               </Link>
@@ -160,7 +160,7 @@ export default async function ProfilePage() {
                       </div>
                     )}
                     {v.durationSec ? (
-                      <span className="absolute bottom-1.5 right-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[11px] font-medium tabular-nums">
+                      <span className="absolute bottom-1.5 right-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-cream">
                         {formatDuration(v.durationSec)}
                       </span>
                     ) : null}

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { VideoCard } from "@/components/VideoCard";
 import { LiveCard } from "@/components/LiveCard";
 import {
+  CATEGORY_BADGE_CLASS,
   CATEGORY_META,
   VIDEO_CATEGORIES,
   categoryHref,
@@ -54,7 +55,7 @@ export default async function CategoryPage({
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
         <div className="flex items-center gap-3">
           <span
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-md ${meta.badgeClass}`}
+            className={`inline-flex h-10 w-10 items-center justify-center rounded-md ${CATEGORY_BADGE_CLASS}`}
           >
             <CategoryIcon category={slug} className="h-5 w-5" />
           </span>

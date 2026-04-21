@@ -6,31 +6,37 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Retro CRT navy base
-        bg: "#0b1d2e",
-        surface: "#13314f",
-        "surface-2": "#1b4066",
-        border: "#2b4c6e",
+        // Theme tokens — resolved from CSS variables in globals.css.
+        // Swap the `.theme-light` / `.theme-dark` class on <html> to retheme.
+        bg: "var(--color-bg)",
+        surface: "var(--color-surface)",
+        "surface-2": "var(--color-surface-2)",
+        border: "var(--color-border)",
 
-        // Warm cream foreground
-        text: "#f7e9c9",
-        muted: "#b6a784",
+        text: "var(--color-text)",
+        muted: "var(--color-muted)",
 
-        // Sunset orange — primary action
-        accent: "#ff8c3a",
-        "accent-hover": "#ffa55b",
+        // Brand accents — constant across themes so the tricolor keeps its identity.
+        accent: "var(--color-accent)",
+        "accent-hover": "var(--color-accent-hover)",
 
-        // Retro sky blue — secondary accent
-        "accent-blue": "#5eb1f2",
-        "accent-blue-hover": "#86c5f6",
+        "accent-blue": "var(--color-accent-blue)",
+        "accent-blue-hover": "var(--color-accent-blue-hover)",
 
-        // Signal red — live + alerts
-        live: "#e23d3d",
-        "accent-red": "#e23d3d",
-        "accent-red-hover": "#f25454",
+        live: "var(--color-live)",
+        "accent-red": "var(--color-accent-red)",
+        "accent-red-hover": "var(--color-accent-red-hover)",
 
-        // Nostalgia cream (for highlighted chips)
-        cream: "#f7e9c9",
+        cream: "var(--color-cream)",
+
+        // Text ink that sits on brand-accent buttons (dark in both themes).
+        "on-accent": "var(--color-on-accent)",
+
+        // Error / destructive-action semantic tokens — theme-aware.
+        danger: "var(--color-danger)",
+        "danger-bg": "var(--color-danger-bg)",
+        "danger-border": "var(--color-danger-border)",
+        "danger-hover-bg": "var(--color-danger-hover-bg)",
       },
       fontFamily: {
         sans: [
@@ -52,17 +58,17 @@ const config: Config = {
         ],
       },
       boxShadow: {
-        retro: "0 2px 0 0 #0b1d2e, 0 4px 0 0 #e23d3d",
-        "retro-sm": "0 2px 0 0 #0b1d2e",
+        retro: "0 2px 0 0 var(--color-shadow-retro), 0 4px 0 0 var(--color-accent-red)",
+        "retro-sm": "0 2px 0 0 var(--color-shadow-retro)",
       },
       backgroundImage: {
         /** Blue → orange → red (matches wordmark colors, different order than retro-sunset) */
         "retro-tricolor":
-          "linear-gradient(135deg, #5eb1f2 0%, #ff8c3a 50%, #e23d3d 100%)",
+          "linear-gradient(135deg, var(--retro-blue) 0%, var(--retro-orange) 50%, var(--retro-red) 100%)",
         "retro-sunset":
-          "linear-gradient(135deg, #ff8c3a 0%, #e23d3d 50%, #5eb1f2 100%)",
+          "linear-gradient(135deg, var(--retro-orange) 0%, var(--retro-red) 50%, var(--retro-blue) 100%)",
         "retro-stripes":
-          "repeating-linear-gradient(135deg, rgba(255,140,58,0.08) 0 14px, transparent 14px 28px)",
+          "repeating-linear-gradient(135deg, rgba(226,158,75,0.08) 0 14px, transparent 14px 28px)",
       },
     },
   },

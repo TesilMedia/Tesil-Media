@@ -101,7 +101,7 @@ export function EditVideoForm({ video }: { video: Video }) {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       {error ? (
-        <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+        <div className="rounded-md border border-danger-border bg-danger-bg px-3 py-2 text-sm text-danger">
           {error}
         </div>
       ) : null}
@@ -242,7 +242,7 @@ export function EditVideoForm({ video }: { video: Video }) {
         <button
           type="submit"
           disabled={saving}
-          className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-bg hover:bg-accent-hover disabled:opacity-60"
+          className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-60"
         >
           {saving ? "Saving…" : "Save changes"}
         </button>

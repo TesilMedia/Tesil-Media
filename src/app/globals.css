@@ -2,52 +2,125 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ---------------------------------------------------------------------------
+   Retro theme tokens
+   --------------------------------------------------------------------------- */
+
+/* Default: light "muted stone" theme. Flip to .theme-dark on <html> to swap. */
+:root,
+.theme-light {
+  color-scheme: light;
+
+  /* Surfaces — warm stone base, lifted panels, soft tonal borders */
+  --color-bg: #d4d0c9;
+  --color-surface: #dcd8d2;
+  --color-surface-2: #c5c0b7;
+  --color-border: #a8a298;
+
+  /* Foreground — warm near-black on stone; `muted` tuned for AA small (4.5:1). */
+  --color-text: #2a2620;
+  --color-muted: #55504a;
+
+  /* Tricolor — single source for dividers, wordmark, and Tailwind retro-* gradients */
+  --retro-blue: #308695;
+  --retro-orange: #e29e4b;
+  --retro-red: #d5586a;
+
+  /* Brand accents (mapped from tricolor + tuned hovers) */
+  --color-accent: var(--retro-orange);
+  --color-accent-hover: #ebb370;
+  --color-accent-blue: var(--retro-blue);
+  --color-accent-blue-hover: #3fa0b0;
+  --color-accent-red: var(--retro-red);
+  --color-accent-red-hover: #df7487;
+  --color-live: var(--retro-red);
+  --color-cream: #ece8e0;
+
+  /* Text that sits on a brand accent button (needs dark ink on warm orange) */
+  --color-on-accent: #2a2620;
+
+  /* Error / destructive action tints — keyed to the new rose-red */
+  --color-danger: #a33b4b;
+  --color-danger-bg: rgba(213, 88, 106, 0.10);
+  --color-danger-border: rgba(213, 88, 106, 0.45);
+  --color-danger-hover-bg: rgba(213, 88, 106, 0.18);
+
+  /* Drop-shadow companion for the .shadow-retro preset */
+  --color-shadow-retro: #55504a;
+
+  --retro-navy: #1e2a2d;
+}
+
+/* Dark theme — muted slate/teal palette. */
+.theme-dark {
   color-scheme: dark;
-  --retro-orange: #ff8c3a;
-  --retro-red: #e23d3d;
-  --retro-blue: #5eb1f2;
-  --retro-navy: #0b1d2e;
-  --retro-cream: #f7e9c9;
+
+  --color-bg: #455154;
+  --color-surface: #52605f;
+  --color-surface-2: #5e6d6c;
+  --color-border: #2c3639;
+
+  --color-text: #ece7d9;
+  --color-muted: #b2ada0;
+
+  --retro-blue: #308695;
+  --retro-orange: #e29e4b;
+  --retro-red: #d5586a;
+
+  --color-accent: var(--retro-orange);
+  --color-accent-hover: #ebb370;
+  --color-accent-blue: var(--retro-blue);
+  --color-accent-blue-hover: #3fa0b0;
+  --color-accent-red: var(--retro-red);
+  --color-accent-red-hover: #df7487;
+  --color-live: var(--retro-red);
+  --color-cream: #ece7d9;
+
+  --color-on-accent: #1e2a2d;
+
+  --color-danger: #f4a7b0;
+  --color-danger-bg: rgba(213, 88, 106, 0.16);
+  --color-danger-border: rgba(213, 88, 106, 0.50);
+  --color-danger-hover-bg: rgba(213, 88, 106, 0.25);
+
+  --color-shadow-retro: #1e2a2d;
 }
 
 html,
 body {
-  background-color: var(--retro-navy);
-  color: var(--retro-cream);
+  background-color: var(--color-bg);
+  color: var(--color-text);
   min-height: 100dvh;
 }
 
-/* Warm retro glow behind the app — sunset from top, CRT blue at the base.
-   Subtle noise/scan-lines give it that old-TV feel without hurting text. */
 body {
   font-family: var(--font-body), system-ui, -apple-system, "Segoe UI", Roboto,
     Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background-image:
-    radial-gradient(
-      ellipse 80% 50% at 50% -10%,
-      rgba(255, 140, 58, 0.18),
-      transparent 60%
-    ),
-    radial-gradient(
-      ellipse 60% 40% at 90% 110%,
-      rgba(226, 61, 61, 0.14),
-      transparent 65%
-    ),
-    radial-gradient(
-      ellipse 70% 50% at 0% 100%,
-      rgba(94, 177, 242, 0.12),
-      transparent 65%
-    ),
-    repeating-linear-gradient(
-      0deg,
-      rgba(11, 29, 46, 0) 0px,
-      rgba(11, 29, 46, 0) 2px,
-      rgba(0, 0, 0, 0.18) 3px,
-      rgba(11, 29, 46, 0) 4px
-    );
   background-attachment: fixed;
+}
+
+/* Light theme: subtle CRT scanlines (same rhythm as dark, lower contrast). */
+:root body,
+.theme-light body {
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(42, 38, 32, 0) 0px,
+    rgba(42, 38, 32, 0) 2px,
+    rgba(42, 38, 32, 0.055) 3px,
+    rgba(42, 38, 32, 0) 4px
+  );
+}
+
+/* Dark theme: subtle CRT scanlines only (no tricolor glow). */
+.theme-dark body {
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(30, 42, 45, 0) 0px,
+    rgba(30, 42, 45, 0) 2px,
+    rgba(0, 0, 0, 0.18) 3px,
+    rgba(30, 42, 45, 0) 4px
+  );
 }
 
 a {
@@ -55,7 +128,6 @@ a {
   text-decoration: none;
 }
 
-/* Display headings get the retro treatment */
 h1,
 h2,
 h3 {
@@ -63,31 +135,33 @@ h3 {
   letter-spacing: calc(0.01em + 1px);
 }
 
-/* Retro-tinted scrollbars */
+/* Retro-tinted scrollbars — react to the current theme. */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #ff8c3a, #e23d3d);
+  background: linear-gradient(180deg, var(--retro-orange), var(--retro-red));
   border-radius: 10px;
-  border: 2px solid #0b1d2e;
+  border: 2px solid var(--color-bg);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #ffa55b, #f25454);
+  background: linear-gradient(
+    180deg,
+    var(--color-accent-hover),
+    var(--color-accent-red-hover)
+  );
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* Selection in warm orange */
 ::selection {
-  background: rgba(255, 140, 58, 0.4);
+  background: rgba(226, 158, 75, 0.4);
   color: #fff;
 }
 
 @layer utilities {
-  /* Righteous reads tight at small sizes; a hair of tracking matches the retro UI */
   .font-display {
     letter-spacing: 1px;
   }
@@ -109,9 +183,9 @@ h3 {
   .retro-gradient-text {
     background: linear-gradient(
       90deg,
-      #ff8c3a 0%,
-      #e23d3d 55%,
-      #5eb1f2 100%
+      var(--retro-blue) 0%,
+      var(--retro-orange) 45%,
+      var(--retro-red) 100%
     );
     -webkit-background-clip: text;
     background-clip: text;
@@ -120,7 +194,80 @@ h3 {
 
   /* Chunky retro button border (double-stroke look) */
   .retro-ring {
-    box-shadow: inset 0 0 0 1px rgba(247, 233, 201, 0.25),
-      0 2px 0 0 rgba(11, 29, 46, 0.9);
+    box-shadow: inset 0 0 0 1px rgba(236, 231, 217, 0.25),
+      0 2px 0 0 rgba(30, 42, 45, 0.9);
+  }
+
+  /* -------------------------------------------------------------------------
+     Tricolor dividers — hard blue/orange/red bands used to break up sections.
+     -b / -r / -t / -l are one-sided dividers implemented with a pseudo-element
+     so they sit cleanly on top of any background without fighting borders.
+     ------------------------------------------------------------------------- */
+
+  .retro-tricolor-divider-b,
+  .retro-tricolor-divider-t,
+  .retro-tricolor-divider-r,
+  .retro-tricolor-divider-l,
+  .retro-tricolor-frame {
+    position: relative;
+  }
+
+  .retro-tricolor-divider-b::after,
+  .retro-tricolor-divider-t::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: linear-gradient(
+      to bottom,
+      var(--retro-blue) 0 33.33%,
+      var(--retro-orange) 33.33% 66.66%,
+      var(--retro-red) 66.66% 100%
+    );
+    pointer-events: none;
+  }
+  .retro-tricolor-divider-b::after {
+    bottom: 0;
+  }
+  .retro-tricolor-divider-t::after {
+    top: 0;
+  }
+
+  /* Rounded end caps on horizontal tricolor strips — add with -b / -t. */
+  .retro-tricolor-divider-b.retro-tricolor-divider-caps::after,
+  .retro-tricolor-divider-t.retro-tricolor-divider-caps::after {
+    border-radius: 3px;
+  }
+
+  .retro-tricolor-divider-r::after,
+  .retro-tricolor-divider-l::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    background: linear-gradient(
+      to right,
+      var(--retro-blue) 0 33.33%,
+      var(--retro-orange) 33.33% 66.66%,
+      var(--retro-red) 66.66% 100%
+    );
+    pointer-events: none;
+  }
+  .retro-tricolor-divider-r::after {
+    right: 0;
+  }
+  .retro-tricolor-divider-l::after {
+    left: 0;
+  }
+
+  /* 4-sided tricolor frame — three concentric outlines (blue, orange, red)
+     wrapping a container. Remember to give the element enough outer margin. */
+  .retro-tricolor-frame {
+    box-shadow:
+      0 0 0 2px var(--retro-blue),
+      0 0 0 4px var(--retro-orange),
+      0 0 0 6px var(--retro-red);
   }
 }

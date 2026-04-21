@@ -43,12 +43,12 @@ export function DeleteVideoButton({
         type="button"
         onClick={onDelete}
         disabled={pending}
-        className="rounded-full border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs text-red-200 hover:bg-red-500/20 disabled:opacity-60"
+        className="rounded-full bg-accent-red px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-red-hover active:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-accent-red"
       >
         {pending ? "Deleting…" : "Delete"}
       </button>
       {error ? (
-        <span className="text-[10px] text-red-300">{error}</span>
+        <span className="text-[10px] text-danger">{error}</span>
       ) : null}
     </span>
   );

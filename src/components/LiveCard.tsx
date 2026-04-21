@@ -37,7 +37,7 @@ export function LiveCard(props: LiveCardProps) {
           <span className="live-pulse inline-block h-1.5 w-1.5 rounded-full bg-cream" />
           Live
         </span>
-        <span className="absolute bottom-2 left-2 rounded-sm bg-bg/80 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-cream">
+        <span className="absolute bottom-2 left-2 rounded-sm bg-black/75 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-cream">
           {formatViews(props.viewers)} watching
         </span>
         {props.rating ? (
@@ -66,7 +66,7 @@ export function LiveCard(props: LiveCardProps) {
           <div className="min-w-0">
             <Link
               href={`/live/${props.channelSlug}`}
-              className="line-clamp-2 min-w-0 w-full text-sm font-semibold leading-snug hover:text-accent"
+              className="line-clamp-2 min-w-0 w-full text-sm font-semibold leading-snug hover:underline"
             >
               {props.title}
             </Link>

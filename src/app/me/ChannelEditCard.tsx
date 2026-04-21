@@ -168,7 +168,7 @@ export function ChannelEditCard({ channel, stats }: Props) {
         ) : (
           <form onSubmit={save} className="flex flex-col gap-3">
             {error ? (
-              <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+              <div className="rounded-md border border-danger-border bg-danger-bg px-3 py-2 text-xs text-danger">
                 {error}
               </div>
             ) : null}
@@ -263,7 +263,7 @@ export function ChannelEditCard({ channel, stats }: Props) {
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-bg hover:bg-accent-hover disabled:opacity-60"
+                className="flex-1 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-60"
               >
                 {saving ? "Saving…" : "Save"}
               </button>

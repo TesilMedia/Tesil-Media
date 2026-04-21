@@ -124,7 +124,7 @@ export function ContentFilterCard({ initialHidden }: Props) {
           className="mt-3 border-t border-border pt-3"
         >
           {error ? (
-            <div className="mb-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+            <div className="mb-3 rounded-md border border-danger-border bg-danger-bg px-3 py-2 text-xs text-danger">
               {error}
             </div>
           ) : null}
@@ -175,7 +175,7 @@ export function ContentFilterCard({ initialHidden }: Props) {
             type="button"
             onClick={save}
             disabled={saving || !dirty}
-            className="w-full rounded-md bg-accent px-3 py-2 text-sm font-semibold text-bg hover:bg-accent-hover disabled:opacity-60"
+            className="w-full rounded-md bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-60"
           >
             {saving ? "Saving…" : dirty ? "Save filter" : "Saved"}
           </button>

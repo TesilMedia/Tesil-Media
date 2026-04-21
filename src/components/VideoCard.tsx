@@ -201,7 +201,7 @@ export function VideoCard(props: VideoCardProps) {
         />
       ) : null}
       {props.durationSec ? (
-        <span className="pointer-events-none absolute bottom-2 right-2 rounded-sm bg-bg/80 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-cream">
+        <span className="pointer-events-none absolute bottom-2 right-2 rounded-sm bg-black/75 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-cream">
           {formatDuration(props.durationSec)}
         </span>
       ) : null}
@@ -256,7 +256,7 @@ export function VideoCard(props: VideoCardProps) {
           <div className="min-w-0">
             <Link
               href={`/watch/${props.id}`}
-              className="line-clamp-2 min-w-0 w-full text-sm font-semibold leading-snug hover:text-accent"
+              className="line-clamp-2 min-w-0 w-full text-sm font-semibold leading-snug hover:underline"
             >
               {props.title}
             </Link>

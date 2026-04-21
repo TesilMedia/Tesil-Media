@@ -6,7 +6,7 @@ import { useSyncExternalStore } from "react";
 const MD_MIN = "(min-width: 768px)";
 
 const INPUT_CLASS =
-  "h-10 min-w-0 w-full rounded-full border-2 border-border bg-surface px-3 py-1.5 text-base leading-snug text-text outline-none placeholder:text-muted focus:border-accent sm:px-4 md:h-9 md:text-sm lg:rounded-l-full lg:rounded-r-none";
+  "h-10 min-w-0 w-full rounded-full border-2 border-border bg-surface px-3 py-1.5 text-base leading-snug text-text outline-none placeholder:text-muted focus:outline-none focus:ring-0 focus:ring-offset-0 sm:px-4 md:h-9 md:text-sm lg:rounded-l-full lg:rounded-r-none";
 
 function subscribeMd(callback: () => void) {
   const mq = window.matchMedia(MD_MIN);

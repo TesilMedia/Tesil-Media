@@ -3,6 +3,7 @@ import { Space_Grotesk, Righteous } from "next/font/google";
 
 import "./globals.css";
 import { MobileSidebarProvider } from "@/components/MobileSidebarContext";
+import { ThemeInitScript } from "@/components/ThemeInitScript";
 import { TopNav } from "@/components/TopNav";
 import { Sidebar } from "@/components/Sidebar";
 import { auth } from "@/lib/auth";
@@ -57,8 +58,12 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${bodyFont.variable} ${displayFont.variable}`}
+      suppressHydrationWarning
+      className={`${bodyFont.variable} ${displayFont.variable}`}
     >
+      <head>
+        <ThemeInitScript />
+      </head>
       <body className="bg-bg text-text">
         <MobileSidebarProvider>
           <div className="flex h-dvh max-h-dvh min-h-0 flex-col">

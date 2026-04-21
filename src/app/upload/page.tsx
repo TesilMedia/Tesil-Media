@@ -27,7 +27,7 @@ export default async function UploadPage() {
       <h1 className="mb-1 text-2xl font-semibold">Upload a video</h1>
       <p className="mb-6 text-sm text-muted">
         Uploading to{" "}
-        <Link href={`/c/${channel.slug}`} className="text-accent hover:underline">
+        <Link href={`/c/${channel.slug}`} className="text-accent-blue hover:underline">
           {channel.name}
         </Link>
         {" "}· {videoCount} video{videoCount === 1 ? "" : "s"} so far.

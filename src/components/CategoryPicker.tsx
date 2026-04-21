@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CATEGORY_BADGE_CLASS,
   CATEGORY_META,
   VIDEO_CATEGORIES,
   VideoCategory,
@@ -50,7 +51,7 @@ export function CategoryPicker({
               } disabled:opacity-60`}
             >
               <span
-                className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ${meta.badgeClass}`}
+                className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ${CATEGORY_BADGE_CLASS}`}
               >
                 <CategoryIcon category={slug} className="h-3.5 w-3.5" />
               </span>

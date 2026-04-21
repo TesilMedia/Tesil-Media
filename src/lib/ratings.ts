@@ -27,22 +27,22 @@ export const RATING_META: Record<ContentRating, RatingMeta> = {
   PG: {
     label: "PG",
     description: "General audiences. Safe for all ages.",
-    badgeClass: "bg-emerald-500/55 text-emerald-100 border border-emerald-400/60",
+    badgeClass: "bg-emerald-300 text-emerald-900 border border-emerald-500",
   },
   PG13: {
     label: "PG-13",
     description: "Some material may be unsuitable for younger children.",
-    badgeClass: "bg-sky-500/55 text-sky-100 border border-sky-400/60",
+    badgeClass: "bg-sky-300 text-sky-900 border border-sky-500",
   },
   R: {
     label: "R",
     description: "Mature content. Strong language, violence, or adult themes.",
-    badgeClass: "bg-amber-500/55 text-amber-100 border border-amber-400/60",
+    badgeClass: "bg-amber-300 text-amber-900 border border-amber-500",
   },
   X: {
     label: "X",
     description: "Explicit / adult only. Hidden by default.",
-    badgeClass: "bg-red-600/55 text-red-100 border border-red-400/65",
+    badgeClass: "bg-red-300 text-red-900 border border-red-600",
   },
 };
 

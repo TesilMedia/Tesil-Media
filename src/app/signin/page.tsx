@@ -32,7 +32,7 @@ export default async function SignInPage({
       </p>
 
       {error ? (
-        <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+        <div className="mb-4 rounded-md border border-danger-border bg-danger-bg px-3 py-2 text-sm text-danger">
           Could not sign in. Check your email and password.
         </div>
       ) : null}
@@ -61,7 +61,7 @@ export default async function SignInPage({
         </label>
         <button
           type="submit"
-          className="mt-2 rounded-md bg-accent py-2 text-sm font-semibold text-bg hover:bg-accent-hover"
+          className="mt-2 rounded-md bg-accent-blue py-2 text-sm font-semibold text-white hover:bg-accent-blue-hover"
         >
           Sign in
         </button>
@@ -69,7 +69,7 @@ export default async function SignInPage({
 
       <p className="mt-6 text-sm text-muted">
         Don't have an account?{" "}
-        <Link href="/signup" className="text-accent hover:underline">
+        <Link href="/signup" className="text-accent-blue hover:underline">
           Sign up
         </Link>
       </p>

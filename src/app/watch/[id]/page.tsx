@@ -68,7 +68,7 @@ export default async function WatchPage({
         <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
           <Link
             href={`/watch/${video.id}?override=1`}
-            className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-bg hover:bg-accent-hover"
+            className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover"
           >
             Show anyway
           </Link>

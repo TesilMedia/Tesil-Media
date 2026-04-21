@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
+  CATEGORY_BADGE_CLASS,
   CATEGORY_META,
   VIDEO_CATEGORIES,
   categoryHref,
@@ -79,7 +80,7 @@ export function SidebarLayout({ liveChannels }: Props) {
 
       <aside
         id="main-sidebar"
-        className={`flex min-h-0 w-60 shrink-0 flex-col overflow-y-auto border-r-2 border-accent/30 bg-bg/40 px-2 py-4 backdrop-blur-sm transition-transform duration-200 ease-out fixed left-0 top-14 z-40 h-[calc(100dvh-3.5rem)] lg:static lg:top-auto lg:z-auto lg:h-full ${
+        className={`retro-tricolor-divider-r flex min-h-0 w-60 shrink-0 flex-col overflow-y-auto bg-bg/40 pl-2 pr-[14px] py-4 backdrop-blur-sm transition-transform duration-200 ease-out fixed left-0 top-14 z-40 h-[calc(100dvh-3.5rem)] lg:static lg:top-auto lg:z-auto lg:h-full ${
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
         aria-hidden={drawerHidden}
@@ -92,7 +93,7 @@ export function SidebarLayout({ liveChannels }: Props) {
         </nav>
 
         <div className="mt-6 px-2">
-          <div className="mb-2 font-display text-[12px] uppercase tracking-[0.18em] text-accent">
+          <div className="retro-gradient-text mb-2 font-display text-[12px] uppercase tracking-[0.18em]">
             Categories
           </div>
           <ul className="flex flex-col gap-0.5">
@@ -106,7 +107,7 @@ export function SidebarLayout({ liveChannels }: Props) {
                     onClick={close}
                   >
                     <span
-                      className={`inline-flex h-5 w-5 items-center justify-center rounded ${meta.badgeClass}`}
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded ${CATEGORY_BADGE_CLASS}`}
                     >
                       <CategoryIcon category={slug} className="h-3 w-3" />
                     </span>
@@ -119,7 +120,7 @@ export function SidebarLayout({ liveChannels }: Props) {
         </div>
 
         <div className="mt-6 px-2">
-          <div className="mb-2 font-display text-[12px] uppercase tracking-[0.18em] text-accent">
+          <div className="retro-gradient-text mb-2 font-display text-[12px] uppercase tracking-[0.18em]">
             Live channels
           </div>
           <ul className="flex flex-col gap-1">
@@ -171,7 +172,7 @@ function SidebarLink({
   return (
     <Link
       href={href}
-      className="rounded-md px-2 py-1.5 text-sm font-medium text-text hover:bg-surface hover:text-accent"
+      className="rounded-md px-2 py-1.5 text-sm font-medium text-text hover:bg-surface hover:text-accent-blue"
       onClick={onNavigate}
     >
       {label}
