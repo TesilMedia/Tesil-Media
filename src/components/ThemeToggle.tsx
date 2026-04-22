@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 
 import {
+  THEME_BROADCAST_MESSAGE_TYPE,
   THEME_STORAGE_KEY,
   setThemeOnDocument,
   type StoredTheme,
@@ -34,6 +35,16 @@ export function ThemeToggle() {
     setThemeOnDocument(next);
     localStorage.setItem(THEME_STORAGE_KEY, next);
     setMode(next);
+    for (const frame of document.querySelectorAll("iframe")) {
+      try {
+        frame.contentWindow?.postMessage(
+          { type: THEME_BROADCAST_MESSAGE_TYPE, theme: next },
+          window.location.origin,
+        );
+      } catch {
+        /* cross-origin iframe */
+      }
+    }
   }
 
   function toggle() {

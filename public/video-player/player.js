@@ -2079,6 +2079,7 @@
       if (Number.isFinite(dur) && dur > 0) {
         const ratio = Math.min(1, Math.max(0, t / dur));
         progress.value = String(Math.round(ratio * 1000));
+        syncProgressRailFill();
         video.currentTime = t;
         updateTimeDisplay();
       }
@@ -2187,14 +2188,26 @@
     }
   }
 
+  function syncProgressRailFill() {
+    const max = Number(progress.max);
+    const v = Number(progress.value);
+    const denom = Number.isFinite(max) && max > 0 ? max : 1000;
+    const ratio = Math.min(1, Math.max(0, v / denom));
+    if (progressWrap instanceof HTMLElement) {
+      progressWrap.style.setProperty("--progress-fill", String(ratio));
+    }
+  }
+
   function syncProgressFromVideo() {
     const dur = video.duration;
     if (!dur || !Number.isFinite(dur)) {
       progress.value = 0;
+      syncProgressRailFill();
       return;
     }
     const ratio = video.currentTime / dur;
     progress.value = String(Math.round(ratio * 1000));
+    syncProgressRailFill();
   }
 
   function setState(playing) {
@@ -2830,6 +2843,7 @@
     if (isExternalEmbedSource()) return;
     const pr = player.getBoundingClientRect();
     if (isClientPointOutsideRect(e.clientX, e.clientY, pr)) return;
+    if (!e.ctrlKey) return;
     e.preventDefault();
     zoomFromWheel(e.deltaY, e.clientX, e.clientY);
   }
@@ -2917,6 +2931,7 @@
     const t = (Number(progress.value) / 1000) * dur;
     video.currentTime = t;
     updateTimeDisplay();
+    syncProgressRailFill();
     if (scrubPreviewActive || player.dataset.scrubbing === "true") {
       ensureScrubPreviewVisible();
       updateScrubPreviewFromRatio(Number(progress.value) / 1000);
@@ -3587,6 +3602,18 @@
   });
 
   volumeSlider.value = String(video.volume);
+  /* Browsers / tab-restore sometimes leave a range input focused; that paints a focus ring. */
+  requestAnimationFrame(() => {
+    const ae = document.activeElement;
+    if (ae === volumeSlider || ae === progress) {
+      if (ae instanceof HTMLElement) ae.blur();
+      try {
+        player.focus({ preventScroll: true });
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  });
   syncVolumeSliderLockedUI();
   syncPlaybackRateOptionsUI();
   applyPlaybackRate(video.playbackRate || 1);

@@ -1,6 +1,9 @@
 /** Stored in localStorage when the user picks a theme explicitly. */
 export const THEME_STORAGE_KEY = "tesil-theme";
 
+/** `postMessage` type so `/public/video-player/theme-init.js` can stay in sync. */
+export const THEME_BROADCAST_MESSAGE_TYPE = "tesil-theme";
+
 export type StoredTheme = "light" | "dark";
 
 const BACKDROP_CHROME_SELECTORS = "#app-top-nav, #main-sidebar";

@@ -209,16 +209,18 @@ export function UploadForm() {
       <div className="flex flex-col gap-1 text-sm">
         <span className="text-muted">Video file *</span>
         <label
-          className={`flex cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed px-3 py-6 text-sm transition ${
+          className={`flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed px-3 py-6 text-sm transition ${
             uploading
               ? "border-border bg-surface opacity-60"
               : "border-border bg-surface hover:border-accent/60 hover:bg-surface-2"
           }`}
         >
-          <span>
+          <span className="min-w-0 flex-1">
             {videoName ? (
               <>
-                <span className="block font-medium text-text">{videoName}</span>
+                <span className="block truncate font-medium text-text">
+                  {videoName}
+                </span>
                 <span className="text-xs text-muted">
                   {formatBytes(videoSize)}
                 </span>
@@ -234,7 +236,7 @@ export function UploadForm() {
               </>
             )}
           </span>
-          <span className="rounded-full bg-surface-2 px-3 py-1 text-xs text-muted">
+          <span className="shrink-0 rounded-full bg-surface-2 px-3 py-1 text-xs text-muted">
             Browse
           </span>
           <input
@@ -272,15 +274,17 @@ export function UploadForm() {
       <div className="flex flex-col gap-1 text-sm">
         <span className="text-muted">Thumbnail (optional)</span>
         <label
-          className={`flex cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed px-3 py-4 text-sm transition ${
+          className={`flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed px-3 py-4 text-sm transition ${
             uploading
               ? "border-border bg-surface opacity-60"
               : "border-border bg-surface hover:border-accent/60 hover:bg-surface-2"
           }`}
         >
-          <span>
+          <span className="min-w-0 flex-1">
             {thumbName ? (
-              <span className="font-medium text-text">{thumbName}</span>
+              <span className="block truncate font-medium text-text">
+                {thumbName}
+              </span>
             ) : (
               <>
                 <span className="block font-medium text-text">
@@ -292,7 +296,7 @@ export function UploadForm() {
               </>
             )}
           </span>
-          <span className="rounded-full bg-surface-2 px-3 py-1 text-xs text-muted">
+          <span className="shrink-0 rounded-full bg-surface-2 px-3 py-1 text-xs text-muted">
             Browse
           </span>
           <input

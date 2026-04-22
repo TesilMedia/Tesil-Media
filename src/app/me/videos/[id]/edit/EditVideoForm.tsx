@@ -189,11 +189,11 @@ export function EditVideoForm({ video }: { video: Video }) {
             )}
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed border-border bg-surface px-3 py-2 text-xs hover:border-accent/60 hover:bg-surface-2">
-              <span className="truncate">
+            <label className="flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed border-border bg-surface px-3 py-2 text-xs hover:border-accent/60 hover:bg-surface-2">
+              <span className="min-w-0 flex-1 truncate">
                 {thumbName ?? "Replace thumbnail (jpg/png/webp/gif)"}
               </span>
-              <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted">
+              <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted">
                 Browse
               </span>
               <input

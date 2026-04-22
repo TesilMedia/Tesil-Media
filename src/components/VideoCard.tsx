@@ -5,8 +5,8 @@ import {
   useEffect,
   useRef,
   useState,
+  type MouseEvent,
   type PointerEvent as ReactPointerEvent,
-  type TouchEvent as ReactTouchEvent,
 } from "react";
 
 import { formatDuration, formatViews } from "@/lib/format";
@@ -33,12 +33,22 @@ type VideoCardProps = {
 };
 
 const HOVER_DELAY_MS = 400;
-// Touch: movement past this after touchstart ≈ scroll/drag → start preview immediately.
-const TOUCH_MOVE_PREVIEW_PX = 14;
-// Touch: hold still this long on the thumb to start preview when the device can’t hover.
-const TOUCH_HOLD_PREVIEW_MS = 380;
 
-/** Only one card preview (hover or touch) at a time — avoids many muted videos on mobile scroll. */
+const TRUE_HOVER_MQ = "(hover: hover) and (pointer: fine)";
+
+function useTrueHover() {
+  const [trueHover, setTrueHover] = useState<boolean | null>(null);
+  useEffect(() => {
+    const mq = window.matchMedia(TRUE_HOVER_MQ);
+    const update = () => setTrueHover(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return trueHover;
+}
+
+/** Only one card preview at a time — avoids many muted videos starting at once. */
 type PreviewLeaseRelease = () => void;
 let activePreviewRelease: PreviewLeaseRelease | null = null;
 
@@ -59,15 +69,17 @@ export function VideoCard(props: VideoCardProps) {
   const previewSrc = getPreviewableSrc(props.sourceUrl);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hoverTimerRef = useRef<number | null>(null);
-  const touchSessionRef = useRef<{
-    startX: number;
-    startY: number;
-    holdTimer: number | null;
-    previewStarted: boolean;
-  } | null>(null);
+  const trueHover = useTrueHover();
 
   const [showPreview, setShowPreview] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
+
+  const cancelPendingHoverDelay = () => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  };
 
   /** Stable per mount: used with global lease so only one preview plays app-wide. */
   const previewLeaseReleaseRef = useRef<PreviewLeaseRelease | null>(null);
@@ -76,10 +88,7 @@ export function VideoCard(props: VideoCardProps) {
       const self = previewLeaseReleaseRef.current;
       if (!self) return;
       releasePreviewLease(self);
-      if (hoverTimerRef.current) {
-        clearTimeout(hoverTimerRef.current);
-        hoverTimerRef.current = null;
-      }
+      cancelPendingHoverDelay();
       setShowPreview(false);
       setPreviewReady(false);
       const v = videoRef.current;
@@ -94,19 +103,19 @@ export function VideoCard(props: VideoCardProps) {
     };
   }
 
-  /** Touch scroll/hold preview — always when we have a file URL (works with pointer-hover too). */
-  const useTouchPreview = Boolean(previewSrc);
+  const usePointerHover = trueHover === true && Boolean(previewSrc);
+  const showMobilePreviewButton = trueHover === false && Boolean(previewSrc);
 
   useEffect(() => {
     return () => {
-      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      cancelPendingHoverDelay();
       previewLeaseReleaseRef.current?.();
     };
   }, []);
 
   const startPreviewAfterDelay = () => {
     if (!previewSrc) return;
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    cancelPendingHoverDelay();
     hoverTimerRef.current = window.setTimeout(() => {
       takePreviewLease(previewLeaseReleaseRef.current!);
       setShowPreview(true);
@@ -115,65 +124,13 @@ export function VideoCard(props: VideoCardProps) {
 
   const startPreviewImmediately = () => {
     if (!previewSrc) return;
-    if (hoverTimerRef.current) {
-      clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
-    }
+    cancelPendingHoverDelay();
     takePreviewLease(previewLeaseReleaseRef.current!);
     setShowPreview(true);
   };
 
   const stopPreview = () => {
     previewLeaseReleaseRef.current?.();
-  };
-
-  const handleThumbTouchStart = (e: ReactTouchEvent<HTMLAnchorElement>) => {
-    if (!useTouchPreview) return;
-    if (e.touches.length !== 1) return;
-    const t = e.touches[0];
-    const session: {
-      startX: number;
-      startY: number;
-      holdTimer: number | null;
-      previewStarted: boolean;
-    } = {
-      startX: t.clientX,
-      startY: t.clientY,
-      holdTimer: null,
-      previewStarted: false,
-    };
-    touchSessionRef.current = session;
-    session.holdTimer = window.setTimeout(() => {
-      if (touchSessionRef.current !== session) return;
-      session.holdTimer = null;
-      session.previewStarted = true;
-      startPreviewImmediately();
-    }, TOUCH_HOLD_PREVIEW_MS);
-  };
-
-  const handleThumbTouchMove = (e: ReactTouchEvent<HTMLAnchorElement>) => {
-    if (!useTouchPreview) return;
-    const session = touchSessionRef.current;
-    if (!session || session.previewStarted || !e.touches[0]) return;
-    const t = e.touches[0];
-    const dx = t.clientX - session.startX;
-    const dy = t.clientY - session.startY;
-    if (dx * dx + dy * dy < TOUCH_MOVE_PREVIEW_PX * TOUCH_MOVE_PREVIEW_PX) {
-      return;
-    }
-    if (session.holdTimer) {
-      clearTimeout(session.holdTimer);
-      session.holdTimer = null;
-    }
-    session.previewStarted = true;
-    startPreviewImmediately();
-  };
-
-  const handleThumbTouchEnd = () => {
-    if (!useTouchPreview) return;
-    const session = touchSessionRef.current;
-    if (session?.holdTimer) clearTimeout(session.holdTimer);
-    touchSessionRef.current = null;
   };
 
   const tryPlayPreview = () => {
@@ -196,11 +153,33 @@ export function VideoCard(props: VideoCardProps) {
     tryPlayPreview();
   };
 
+  const timeRel = timeAgoValue(props.createdAt);
+
   const thumbClasses =
     "relative block aspect-video touch-manipulation touch-callout-none overflow-hidden rounded-lg bg-surface shadow-card";
 
+  const thumbMetaPill =
+    "shrink-0 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium tabular-nums text-cream";
+
+  const handleMobilePreviewButtonClick = (e: MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (showPreview) stopPreview();
+    else startPreviewImmediately();
+  };
+
   const thumbnailVisual = (
     <>
+      {showMobilePreviewButton ? (
+        <button
+          type="button"
+          onClick={handleMobilePreviewButtonClick}
+          className="absolute left-2 top-2 z-20 touch-manipulation rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-cream ring-offset-2 hover:bg-black/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue"
+          aria-pressed={showPreview}
+        >
+          {showPreview ? "Stop" : "Preview"}
+        </button>
+      ) : null}
       {props.thumbnail ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -233,14 +212,17 @@ export function VideoCard(props: VideoCardProps) {
           tabIndex={-1}
         />
       ) : null}
-      <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-medium tabular-nums text-cream">
-        {formatViews(props.views)} {props.views === 1 ? "View" : "Views"}
-      </span>
-      {props.durationSec ? (
-        <span className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-medium tabular-nums text-cream">
-          {formatDuration(props.durationSec)}
+      <div className="pointer-events-none absolute bottom-2 left-2 flex max-w-[calc(100%-1rem)] items-center justify-start gap-1.5">
+        {props.durationSec ? (
+          <span className={thumbMetaPill}>{formatDuration(props.durationSec)}</span>
+        ) : null}
+        <span className={thumbMetaPill} title={timeAgoTitle(timeRel)}>
+          {formatTimeAgoShort(timeRel)}
         </span>
-      ) : null}
+        <span className={thumbMetaPill}>
+          {formatViews(props.views)} {props.views === 1 ? "View" : "Views"}
+        </span>
+      </div>
       {props.rating ? (
         <RatingBadge
           rating={props.rating}
@@ -250,6 +232,12 @@ export function VideoCard(props: VideoCardProps) {
       ) : null}
     </>
   );
+
+  const handleThumbPointerEnter = (e: ReactPointerEvent<HTMLAnchorElement>) => {
+    if (!previewSrc) return;
+    if (e.pointerType === "touch") return;
+    startPreviewAfterDelay();
+  };
 
   /** Only real mice should stop preview on leave — touch ending fires pointerleave too. */
   const handleThumbPointerLeave = (
@@ -268,12 +256,8 @@ export function VideoCard(props: VideoCardProps) {
       <Link
         href={`/watch/${props.id}`}
         className={thumbClasses}
-        onPointerEnter={previewSrc ? startPreviewAfterDelay : undefined}
-        onPointerLeave={previewSrc ? handleThumbPointerLeave : undefined}
-        onTouchStart={useTouchPreview ? handleThumbTouchStart : undefined}
-        onTouchMove={useTouchPreview ? handleThumbTouchMove : undefined}
-        onTouchEnd={useTouchPreview ? handleThumbTouchEnd : undefined}
-        onTouchCancel={useTouchPreview ? handleThumbTouchEnd : undefined}
+        onPointerEnter={usePointerHover ? handleThumbPointerEnter : undefined}
+        onPointerLeave={usePointerHover ? handleThumbPointerLeave : undefined}
       >
         {thumbnailVisual}
       </Link>
@@ -305,7 +289,6 @@ export function VideoCard(props: VideoCardProps) {
             >
               {props.channel.name}
             </Link>
-            <div className="text-xs text-muted">{timeAgo(props.createdAt)}</div>
           </div>
         </div>
       </div>
@@ -346,26 +329,48 @@ function getPreviewableSrc(sourceUrl?: string | null): string | null {
   }
 }
 
-function timeAgo(date: Date): string {
+const TIME_AGO_UNITS: [number, string][] = [
+  [60, "s"],
+  [60, "m"],
+  [24, "h"],
+  [30, "d"],
+  [12, "mo"],
+  [Infinity, "y"],
+];
+
+type TimeAgoRel = { value: number; abbr: string };
+
+function timeAgoValue(date: Date): TimeAgoRel {
   const now = Date.now();
   const diffSec = Math.round((now - new Date(date).getTime()) / 1000);
-  const units: [number, string][] = [
-    [60, "second"],
-    [60, "minute"],
-    [24, "hour"],
-    [30, "day"],
-    [12, "month"],
-    [Infinity, "year"],
-  ];
   let value = diffSec;
-  let unit = "second";
-  for (const [factor, name] of units) {
+  let abbr = "s";
+  for (const [factor, name] of TIME_AGO_UNITS) {
     if (value < factor) {
-      unit = name;
+      abbr = name;
       break;
     }
     value = Math.round(value / factor);
-    unit = name;
+    abbr = name;
   }
-  return `${value} ${unit}${value === 1 ? "" : "s"} ago`;
+  return { value, abbr };
+}
+
+function formatTimeAgoShort(rel: TimeAgoRel): string {
+  return `${rel.value}${rel.abbr} ago`;
+}
+
+function timeAgoTitle(rel: TimeAgoRel): string {
+  const { value, abbr } = rel;
+  const full: Record<string, [string, string]> = {
+    s: ["second", "seconds"],
+    m: ["minute", "minutes"],
+    h: ["hour", "hours"],
+    d: ["day", "days"],
+    mo: ["month", "months"],
+    y: ["year", "years"],
+  };
+  const [one, many] = full[abbr] ?? ["", ""];
+  const label = value === 1 ? one : many;
+  return `${value} ${label} ago`;
 }

@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- YouTube embeds require a normal referrer; without this, many setups get error 153 for every video. -->
     <meta name="referrer" content="strict-origin-when-cross-origin" />
-    <meta name="theme-color" content="#0f1114" />
+    <meta name="theme-color" content="#d4d0c9" />
     <title>Tesil Video Player</title>
+    <script src="theme-init.js"></script>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -199,6 +200,9 @@
               ></canvas>
               <span class="player__scrub-preview-time" id="previewTime"></span>
             </div>
+            <div class="player__progress-rail" aria-hidden="true">
+              <div class="player__progress-rail__fill"></div>
+            </div>
             <input
               type="range"
               class="player__progress"
@@ -268,12 +272,42 @@
             <div class="player__windows-group">
               <button
                 type="button"
-                class="player__btn player__btn--square player__btn--pip"
+                class="player__btn player__btn--square"
                 id="pip"
-                aria-label="Picture in picture"
-                data-tooltip="Picture-in-picture"
+                aria-label="Picture in Picture"
+                data-tooltip="Picture-in-Picture"
               >
-                PiP
+                <span class="icon-pip" aria-hidden="true">
+                  <svg
+                    class="icon-pip__svg"
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <rect
+                      x="2"
+                      y="2"
+                      width="20"
+                      height="20"
+                      rx="2.5"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linejoin="round"
+                    />
+                    <rect
+                      x="12"
+                      y="12"
+                      width="7"
+                      height="7"
+                      rx="1.5"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </span>
               </button>
               <button
                 type="button"
@@ -332,7 +366,7 @@
           <li><kbd>[</kbd> <kbd>]</kbd> Slower / faster playback (hold to repeat)</li>
           <li><kbd>+</kbd> <kbd>−</kbd> Zoom in / out (hold to repeat) · <kbd>0</kbd> reset zoom</li>
           <li class="commands__hint commands__hint--desktop">
-            Scroll wheel on video — zoom toward pointer
+            <kbd>Ctrl</kbd> + scroll on video — zoom toward pointer
           </li>
           <li>Drag video when zoomed — pan</li>
           <li class="commands__hint commands__hint--touch">

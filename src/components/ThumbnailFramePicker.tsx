@@ -135,11 +135,11 @@ export function ThumbnailFramePicker({
 
   return (
     <div
-      className="mt-2 flex flex-col gap-2 rounded-md border border-border bg-surface-2/40 p-3 text-xs"
+      className="mt-2 flex flex-col gap-2 rounded-md border border-border bg-surface p-3 text-xs"
       aria-labelledby={labelId}
     >
       <div id={labelId} className="font-medium text-text">
-        Tesil player — pick a frame
+        Choose a Frame to use as Thumbnail
       </div>
       <p className="text-[11px] text-muted">
         Scrub the timeline, use the <kbd className="rounded bg-surface px-0.5">,</kbd> and{" "}
@@ -147,13 +147,13 @@ export function ThumbnailFramePicker({
         capture the frame.
       </p>
       <div
-        className="relative w-full overflow-hidden rounded-md bg-black"
+        className="relative w-full overflow-hidden rounded-md bg-surface"
         style={{ aspectRatio: "16 / 9" }}
       >
         <iframe
           key={iframeSrc + (videoFile ? `${videoFile.name}-${videoFile.size}` : "")}
           ref={iframeRef}
-          title="Tesil player — pick thumbnail frame"
+          title="Choose a frame to use as thumbnail"
           src={iframeSrc}
           onLoad={onIframeLoad}
           className="absolute inset-0 h-full w-full border-0"
