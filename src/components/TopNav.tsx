@@ -19,7 +19,10 @@ type Props = {
 
 export function TopNav({ user, channel }: Props) {
   return (
-    <header className="retro-tricolor-divider-b sticky top-0 z-30 flex h-14 shrink-0 items-center gap-[8px] bg-bg/85 px-[8px] pb-[6px] backdrop-blur supports-[backdrop-filter]:bg-bg/70">
+    <header
+      id="app-top-nav"
+      className="retro-tricolor-divider-b sticky top-0 z-30 flex h-14 shrink-0 items-center gap-[8px] bg-bg/85 px-[8px] pb-[6px] backdrop-blur supports-[backdrop-filter]:bg-bg/70"
+    >
       <div className="flex shrink-0 items-center gap-[8px]">
         <MobileNavToggle />
         <Link
@@ -72,14 +75,14 @@ export function TopNav({ user, channel }: Props) {
             <Link
               href="/signin"
               title="Sign in"
-              className="inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-blue px-2.5 text-xs font-semibold text-white shadow-retro-sm hover:bg-accent-blue-hover sm:px-3 sm:text-sm md:h-9"
+              className="inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent-blue px-2.5 text-xs font-semibold text-white hover:bg-accent-blue-hover sm:px-3 sm:text-sm md:h-9"
             >
               Sign in
             </Link>
             <Link
               href="/signup"
               title="Sign up"
-              className="inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent px-2.5 text-xs font-semibold text-white shadow-retro-sm hover:bg-accent-hover sm:px-3 sm:text-sm md:h-9"
+              className="inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-accent px-2.5 text-xs font-semibold text-white hover:bg-accent-hover sm:px-3 sm:text-sm md:h-9"
             >
               Sign up
             </Link>

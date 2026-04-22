@@ -67,6 +67,13 @@
   const startupAutoplay = ["1", "true", "yes"].includes(
     String(startupQuery.get("autoplay") || "").toLowerCase()
   );
+  /**
+   * Thumbnail / host UI loads the embed with no `src=`, then passes a `File` via
+   * `postMessage` (object URLs in `?src=` do not work across documents for blob:).
+   */
+  const startupHostBridge = ["1", "true", "yes"].includes(
+    String(startupQuery.get("hostBridge") || "").toLowerCase()
+  );
 
   /**
    * When false (typical phones / touch-first tablets), we do not mute+retry on
@@ -1745,6 +1752,7 @@
 
   function applyDemoSampleIfNeeded() {
     if (isExternalEmbedSource()) return;
+    if (startupHostBridge) return;
     if (hasCustomSource || pendingOsFileOpen || pendingNativeInitial || blobUrl) return;
     if (video.currentSrc) return;
     expectsLiveHlsPlayback = false;
@@ -3603,6 +3611,107 @@
     if (cornerTools instanceof HTMLElement) ro.observe(cornerTools);
   }
   window.addEventListener("resize", syncRatePillWidthToZoom);
+
+  /** TESIL app thumbnail picker (parent page embed): report duration. */
+  function postMetaToHostBridgeParent() {
+    if (window.parent === window) return;
+    if (isExternalEmbedSource()) return;
+    if (isLiveStream()) {
+      if (video.duration === Infinity) return;
+      if (!Number.isFinite(video.duration)) return;
+    }
+    const d = video.duration;
+    if (!Number.isFinite(d) || d <= 0) return;
+    try {
+      window.parent.postMessage(
+        { type: "tesil-embed-meta", durationSec: Math.round(d) },
+        "*"
+      );
+    } catch (_) {
+      /* noop */
+    }
+  }
+
+  video.addEventListener("loadedmetadata", postMetaToHostBridgeParent);
+
+  const THUMB_JPEG_MAX_W = 1280;
+  const THUMB_JPEG_Q = 0.92;
+
+  window.addEventListener("message", (e) => {
+    if (e.source !== window.parent) return;
+    if (!e.data || typeof e.data.type !== "string") return;
+    if (e.origin && e.origin !== window.location.origin) return;
+    if (e.data.type === "tesil-embed-set-file") {
+      if (e.data.file instanceof File) {
+        loadVideoFromFile(e.data.file);
+      }
+      return;
+    }
+    if (e.data.type !== "tesil-embed-capture-frame") return;
+    const id = e.data.id;
+    const respond = (payload) => {
+      try {
+        window.parent.postMessage(
+          { type: "tesil-embed-capture-frame-result", id, ...payload },
+          "*"
+        );
+      } catch (_) {
+        /* noop */
+      }
+    };
+    if (isExternalEmbedSource()) {
+      respond({
+        ok: false,
+        error:
+          "Thumbnails can’t be captured from this player mode. Use a direct video (MP4, WebM, …) on this site, or choose an image file.",
+      });
+      return;
+    }
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) {
+      respond({
+        ok: false,
+        error: "No frame yet — wait for the video to show a picture, then try again.",
+      });
+      return;
+    }
+    let w = vw;
+    let h = vh;
+    if (w > THUMB_JPEG_MAX_W) {
+      h = Math.round((vh * THUMB_JPEG_MAX_W) / vw);
+      w = THUMB_JPEG_MAX_W;
+    }
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d");
+    if (!ctx) {
+      respond({ ok: false, error: "Could not read pixels from this video." });
+      return;
+    }
+    try {
+      ctx.drawImage(video, 0, 0, w, h);
+    } catch (_err) {
+      respond({
+        ok: false,
+        error:
+          "This video can’t be captured (browser security). Use a still image, or a file from this site.",
+      });
+      return;
+    }
+    c.toBlob(
+      (blob) => {
+        if (!blob) {
+          respond({ ok: false, error: "Could not encode thumbnail." });
+          return;
+        }
+        respond({ ok: true, blob });
+      },
+      "image/jpeg",
+      THUMB_JPEG_Q
+    );
+  });
 
   if (typeof window.videoPlayerNative !== "undefined") {
     pendingNativeInitial = true;

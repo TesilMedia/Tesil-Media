@@ -8,51 +8,51 @@ import {
   useSyncExternalStore,
 } from "react";
 
-/** Matches Tailwind `md` default */
-const MD_MIN = "(min-width: 768px)";
+/** Matches Tailwind `sm` (640px) */
+const SM_MIN = "(min-width: 640px)";
 
-function subscribeMd(callback: () => void) {
-  const mq = window.matchMedia(MD_MIN);
+function subscribeSm(callback: () => void) {
+  const mq = window.matchMedia(SM_MIN);
   mq.addEventListener("change", callback);
   return () => mq.removeEventListener("change", callback);
 }
 
-function getMdSnapshot() {
-  return window.matchMedia(MD_MIN).matches;
+function getSmSnapshot() {
+  return window.matchMedia(SM_MIN).matches;
 }
 
-function getServerMdSnapshot() {
+function getServerSmSnapshot() {
   return false;
 }
 
 /**
  * Top-nav search.
  *
- *  - md+      : renders an inline form (rounded input + Search submit button on lg+).
- *  - below md : collapsed to a single circular magnifying-glass button. Tapping
+ *  - sm+ (640px+): inline form (rounded input + Search submit button on lg+).
+ *  - below sm    : collapsed to a single circular magnifying-glass button. Tapping
  *               it overlays an expanded form across the entire header row with a
  *               back button, auto-focused input, and submit icon.
  */
 export function TopNavSearchInput() {
   const router = useRouter();
-  const mdUp = useSyncExternalStore(
-    subscribeMd,
-    getMdSnapshot,
-    getServerMdSnapshot,
+  const smUp = useSyncExternalStore(
+    subscribeSm,
+    getSmSnapshot,
+    getServerSmSnapshot,
   );
   const [expanded, setExpanded] = useState(false);
   const mobileInputRef = useRef<HTMLInputElement>(null);
   const expandedFormRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    if (mdUp && expanded) setExpanded(false);
-  }, [mdUp, expanded]);
+    if (smUp && expanded) setExpanded(false);
+  }, [smUp, expanded]);
 
   useEffect(() => {
-    if (expanded && !mdUp) {
+    if (expanded && !smUp) {
       mobileInputRef.current?.focus();
     }
-  }, [expanded, mdUp]);
+  }, [expanded, smUp]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -64,7 +64,7 @@ export function TopNavSearchInput() {
   }, [expanded]);
 
   useEffect(() => {
-    if (!expanded || mdUp) return;
+    if (!expanded || smUp) return;
     const onPointerDown = (e: PointerEvent) => {
       const form = expandedFormRef.current;
       if (!form || form.contains(e.target as Node)) return;
@@ -72,9 +72,9 @@ export function TopNavSearchInput() {
     };
     document.addEventListener("pointerdown", onPointerDown, true);
     return () => document.removeEventListener("pointerdown", onPointerDown, true);
-  }, [expanded, mdUp]);
+  }, [expanded, smUp]);
 
-  if (mdUp) {
+  if (smUp) {
     return (
       <form
         action="/search"

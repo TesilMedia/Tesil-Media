@@ -93,7 +93,7 @@ export function ContentFilterCard({ initialHidden }: Props) {
         </span>
         <span className="flex shrink-0 items-center gap-2 pt-0.5">
           {dirty ? (
-            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-medium text-amber-100">
+            <span className="rounded border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-muted">
               Unsaved
             </span>
           ) : null}
@@ -129,7 +129,7 @@ export function ContentFilterCard({ initialHidden }: Props) {
             </div>
           ) : null}
           {ok ? (
-            <div className="mb-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+            <div className="mb-3 rounded-md border border-success-border bg-success-bg px-3 py-2 text-xs text-success">
               Preferences saved.
             </div>
           ) : null}

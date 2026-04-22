@@ -2,7 +2,11 @@
 
 import { useEffect, useLayoutEffect, useState } from "react";
 
-import { THEME_STORAGE_KEY, type StoredTheme } from "@/lib/theme";
+import {
+  THEME_STORAGE_KEY,
+  setThemeOnDocument,
+  type StoredTheme,
+} from "@/lib/theme";
 
 export function ThemeToggle() {
   const [mode, setMode] = useState<"light" | "dark">("light");
@@ -19,10 +23,7 @@ export function ThemeToggle() {
     function syncFromOtherTab(e: StorageEvent) {
       if (e.key !== THEME_STORAGE_KEY || !e.newValue) return;
       const next = e.newValue === "dark" ? "dark" : "light";
-      document.documentElement.classList.remove("theme-light", "theme-dark");
-      document.documentElement.classList.add(
-        next === "dark" ? "theme-dark" : "theme-light",
-      );
+      setThemeOnDocument(next);
       setMode(next);
     }
     window.addEventListener("storage", syncFromOtherTab);
@@ -30,10 +31,7 @@ export function ThemeToggle() {
   }, []);
 
   function applyTheme(next: StoredTheme) {
-    document.documentElement.classList.remove("theme-light", "theme-dark");
-    document.documentElement.classList.add(
-      next === "dark" ? "theme-dark" : "theme-light",
-    );
+    setThemeOnDocument(next);
     localStorage.setItem(THEME_STORAGE_KEY, next);
     setMode(next);
   }

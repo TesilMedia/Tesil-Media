@@ -106,7 +106,7 @@ export function EditVideoForm({ video }: { video: Video }) {
         </div>
       ) : null}
       {ok ? (
-        <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+        <div className="rounded-md border border-success-border bg-success-bg px-3 py-2 text-sm text-success">
           Saved.
         </div>
       ) : null}

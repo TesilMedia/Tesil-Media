@@ -39,14 +39,16 @@
   /* Text that sits on a brand accent button (needs dark ink on warm orange) */
   --color-on-accent: #2a2620;
 
-  /* Error / destructive action tints — keyed to the new rose-red */
-  --color-danger: #a33b4b;
-  --color-danger-bg: rgba(213, 88, 106, 0.10);
-  --color-danger-border: rgba(213, 88, 106, 0.45);
-  --color-danger-hover-bg: rgba(213, 88, 106, 0.18);
+  /* Error banners — flat opaque rose (text is light for contrast on fill) */
+  --color-danger: #ffffff;
+  --color-danger-bg: #c24d5f;
+  --color-danger-border: #9a3d4d;
+  --color-danger-hover-bg: #d5586a;
 
-  /* Drop-shadow companion for the .shadow-retro preset */
-  --color-shadow-retro: #55504a;
+  /* Success banners — flat opaque teal */
+  --color-success: #ffffff;
+  --color-success-bg: #308695;
+  --color-success-border: #256b78;
 
   --retro-navy: #1e2a2d;
 }
@@ -78,12 +80,14 @@
 
   --color-on-accent: #1e2a2d;
 
-  --color-danger: #f4a7b0;
-  --color-danger-bg: rgba(213, 88, 106, 0.16);
-  --color-danger-border: rgba(213, 88, 106, 0.50);
-  --color-danger-hover-bg: rgba(213, 88, 106, 0.25);
+  --color-danger: #ffffff;
+  --color-danger-bg: #c24d5f;
+  --color-danger-border: #9a3d4d;
+  --color-danger-hover-bg: #d5586a;
 
-  --color-shadow-retro: #1e2a2d;
+  --color-success: #ffffff;
+  --color-success-bg: #308695;
+  --color-success-border: #256b78;
 }
 
 /* Content rating pills — flat solid fills; identical in light and dark. */

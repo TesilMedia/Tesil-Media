@@ -38,6 +38,11 @@ const config: Config = {
         "danger-border": "var(--color-danger-border)",
         "danger-hover-bg": "var(--color-danger-hover-bg)",
 
+        // Success / positive banners — theme-aware teal.
+        success: "var(--color-success)",
+        "success-bg": "var(--color-success-bg)",
+        "success-border": "var(--color-success-border)",
+
       },
       fontFamily: {
         sans: [
@@ -59,8 +64,7 @@ const config: Config = {
         ],
       },
       boxShadow: {
-        retro: "0 2px 0 0 var(--color-shadow-retro), 0 4px 0 0 var(--color-accent-red)",
-        "retro-sm": "0 2px 0 0 var(--color-shadow-retro)",
+        card: "0 2px 8px rgba(0, 0, 0, 0.1), 0 4px 18px rgba(0, 0, 0, 0.08)",
       },
       backgroundImage: {
         /** Blue → orange → red (matches wordmark colors, different order than retro-sunset) */

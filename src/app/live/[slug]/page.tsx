@@ -7,6 +7,7 @@ import { RatingBadge } from "@/components/RatingBadge";
 import { formatViews } from "@/lib/format";
 import { RATING_META, isContentRating } from "@/lib/ratings";
 import { getViewerHiddenRatings } from "@/lib/viewerPrefs";
+import { titleOverflowClampClass } from "@/lib/titleClamp";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,11 @@ export default async function LivePage({
             Stream hidden by your filter
           </span>
         </div>
-        <h1 className="text-2xl font-semibold leading-tight">{stream.title}</h1>
+        <h1
+          className={`w-full min-w-0 max-w-full text-2xl font-semibold leading-tight ${titleOverflowClampClass(stream.title)}`}
+        >
+          {stream.title}
+        </h1>
         {meta ? (
           <p className="max-w-lg text-sm text-muted">{meta.description}</p>
         ) : null}
@@ -79,7 +84,7 @@ export default async function LivePage({
       />
 
       <div className="mt-4 flex items-start justify-between gap-4 border-b border-border pb-4">
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-2">
             {stream.isLive ? (
               <span className="flex items-center gap-1 rounded bg-live px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-white">
@@ -93,7 +98,9 @@ export default async function LivePage({
             )}
           </div>
           <div className="flex items-start gap-2">
-            <h1 className="flex-1 text-xl font-semibold leading-tight">
+            <h1
+              className={`flex-1 min-w-0 text-xl font-semibold leading-tight ${titleOverflowClampClass(stream.title)}`}
+            >
               {stream.title}
             </h1>
             <RatingBadge rating={stream.rating} size="sm" className="mt-1" />

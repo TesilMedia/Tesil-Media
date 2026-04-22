@@ -37,6 +37,9 @@ type Props = {
   liveChannels: SidebarLiveChannel[];
 };
 
+const sidebarSectionLinkClass =
+  "block w-full rounded-md px-2 py-1.5 text-left font-display text-[12px] uppercase tracking-[0.18em] text-text hover:bg-surface hover:text-accent-blue";
+
 export function SidebarLayout({ liveChannels }: Props) {
   const pathname = usePathname();
   const { open, close } = useMobileSidebar();
@@ -86,96 +89,84 @@ export function SidebarLayout({ liveChannels }: Props) {
         aria-hidden={drawerHidden}
         inert={drawerHidden ? true : undefined}
       >
-        <nav className="flex flex-col gap-1 px-2">
-          <SidebarLink href="/" label="Home" onNavigate={close} />
-          <SidebarLink href="/?filter=live" label="Live now" onNavigate={close} />
-          <SidebarLink href="/?filter=recent" label="Recent" onNavigate={close} />
-        </nav>
+        <nav className="flex flex-col px-2">
+          <Link href="/" className={sidebarSectionLinkClass} onClick={close}>
+            Home
+          </Link>
 
-        <div className="mt-6 px-2">
-          <div className="retro-gradient-text mb-2 font-display text-[12px] uppercase tracking-[0.18em]">
-            Categories
-          </div>
-          <ul className="flex flex-col gap-0.5">
-            {VIDEO_CATEGORIES.map((slug) => {
-              const meta = CATEGORY_META[slug];
-              return (
-                <li key={slug}>
-                  <Link
-                    href={categoryHref(slug)}
-                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface hover:text-accent-blue"
-                    onClick={close}
-                  >
-                    <span
-                      className={`inline-flex h-5 w-5 items-center justify-center rounded ${CATEGORY_BADGE_CLASS}`}
+          <div className="mt-6">
+            <Link
+              href="/categories"
+              className={`${sidebarSectionLinkClass} mb-2`}
+              onClick={close}
+            >
+              Categories
+            </Link>
+            <ul className="flex flex-col gap-0.5">
+              {VIDEO_CATEGORIES.map((slug) => {
+                const meta = CATEGORY_META[slug];
+                return (
+                  <li key={slug}>
+                    <Link
+                      href={categoryHref(slug)}
+                      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface hover:text-accent-blue"
+                      onClick={close}
                     >
-                      <CategoryIcon category={slug} className="h-3 w-3" />
-                    </span>
-                    <span className="flex-1 truncate">{meta.label}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-
-        <div className="mt-6 px-2">
-          <div className="retro-gradient-text mb-2 font-display text-[12px] uppercase tracking-[0.18em]">
-            Live channels
+                      <span
+                        className={`inline-flex h-5 w-5 items-center justify-center rounded ${CATEGORY_BADGE_CLASS}`}
+                      >
+                        <CategoryIcon category={slug} className="h-3 w-3" />
+                      </span>
+                      <span className="flex-1 truncate">{meta.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
-          <ul className="flex flex-col gap-1">
-            {liveChannels.length === 0 ? (
-              <li className="px-2 py-1 text-xs text-muted">Nobody is live.</li>
-            ) : (
-              liveChannels.map((c) => (
-                <li key={c.id}>
-                  <Link
-                    href={`/c/${c.slug}`}
-                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface hover:text-accent-blue"
-                    onClick={close}
-                  >
-                    <span className="relative inline-block h-7 w-7 shrink-0 overflow-hidden rounded-full bg-surface-2">
-                      {c.avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={c.avatarUrl}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                      ) : null}
-                    </span>
-                    <span className="flex-1 truncate">{c.name}</span>
-                    <span className="flex items-center gap-1 text-[11px] text-muted">
-                      <span className="live-pulse inline-block h-1.5 w-1.5 rounded-full bg-live" />
-                      {c.stream?.viewers?.toLocaleString() ?? 0}
-                    </span>
-                  </Link>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
+
+          <div className="mt-6">
+            <Link
+              href="/live-channels"
+              className={`${sidebarSectionLinkClass} mb-2`}
+              onClick={close}
+            >
+              Live Channels
+            </Link>
+            <ul className="flex flex-col gap-1">
+              {liveChannels.length === 0 ? (
+                <li className="px-2 py-1 text-xs text-muted">Nobody is live.</li>
+              ) : (
+                liveChannels.map((c) => (
+                  <li key={c.id}>
+                    <Link
+                      href={`/c/${c.slug}`}
+                      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface hover:text-accent-blue"
+                      onClick={close}
+                    >
+                      <span className="relative inline-block h-7 w-7 shrink-0 overflow-hidden rounded-full bg-surface-2">
+                        {c.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={c.avatarUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : null}
+                      </span>
+                      <span className="flex-1 truncate">{c.name}</span>
+                      <span className="flex items-center gap-1 text-[11px] text-muted">
+                        <span className="live-pulse inline-block h-1.5 w-1.5 rounded-full bg-live" />
+                        {c.stream?.viewers?.toLocaleString() ?? 0}
+                      </span>
+                    </Link>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+        </nav>
       </aside>
     </>
-  );
-}
-
-function SidebarLink({
-  href,
-  label,
-  onNavigate,
-}: {
-  href: string;
-  label: string;
-  onNavigate: () => void;
-}) {
-  return (
-    <Link
-      href={href}
-      className="rounded-md px-2 py-1.5 text-sm font-medium text-text hover:bg-surface hover:text-accent-blue"
-      onClick={onNavigate}
-    >
-      {label}
-    </Link>
   );
 }

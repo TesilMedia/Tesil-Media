@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { formatViews } from "@/lib/format";
+import { titleOverflowClampClass } from "@/lib/titleClamp";
 import { RatingBadge } from "@/components/RatingBadge";
 
 type LiveCardProps = {
@@ -18,7 +19,7 @@ export function LiveCard(props: LiveCardProps) {
     <article className="group flex flex-col gap-2">
       <Link
         href={`/live/${props.channelSlug}`}
-        className="relative block aspect-video overflow-hidden rounded-lg bg-surface"
+        className="relative block aspect-video overflow-hidden rounded-lg bg-surface shadow-card"
       >
         {props.thumbnail ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -33,7 +34,7 @@ export function LiveCard(props: LiveCardProps) {
             Live
           </div>
         )}
-        <span className="absolute left-2 top-2 flex items-center gap-1 rounded-sm bg-live px-2 py-0.5 font-display text-[11px] uppercase tracking-[0.15em] text-cream shadow-retro-sm">
+        <span className="absolute left-2 top-2 flex items-center gap-1 rounded-sm bg-live px-2 py-0.5 font-display text-[11px] uppercase tracking-[0.15em] text-cream">
           <span className="live-pulse inline-block h-1.5 w-1.5 rounded-full bg-cream" />
           Live
         </span>
@@ -66,7 +67,7 @@ export function LiveCard(props: LiveCardProps) {
           <div className="min-w-0">
             <Link
               href={`/live/${props.channelSlug}`}
-              className="line-clamp-2 min-w-0 w-full text-sm font-semibold leading-snug hover:underline"
+              className={`min-w-0 w-full text-sm font-semibold leading-snug hover:underline ${titleOverflowClampClass(props.title)}`}
             >
               {props.title}
             </Link>

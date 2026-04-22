@@ -85,7 +85,7 @@ export default async function ChannelPage({
           </div>
           <button
             type="button"
-            className="shrink-0 justify-self-end rounded-full bg-retro-tricolor px-3 py-2 text-xs font-semibold text-cream shadow-retro-sm hover:enabled:brightness-110 disabled:cursor-not-allowed sm:px-4 sm:text-sm"
+            className="shrink-0 justify-self-end rounded-full bg-accent px-3 py-2 text-xs font-semibold text-on-accent hover:enabled:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60 sm:px-4 sm:text-sm"
             disabled
             title="Follow coming soon"
           >

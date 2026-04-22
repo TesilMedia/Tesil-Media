@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { formatDuration, formatViews } from "@/lib/format";
+import { titleOverflowClampClass } from "@/lib/titleClamp";
 import { RatingBadge } from "@/components/RatingBadge";
 
 type VideoCardProps = {
@@ -196,7 +197,7 @@ export function VideoCard(props: VideoCardProps) {
   };
 
   const thumbClasses =
-    "relative block aspect-video touch-manipulation touch-callout-none overflow-hidden rounded-lg bg-surface";
+    "relative block aspect-video touch-manipulation touch-callout-none overflow-hidden rounded-lg bg-surface shadow-card";
 
   const thumbnailVisual = (
     <>
@@ -232,8 +233,11 @@ export function VideoCard(props: VideoCardProps) {
           tabIndex={-1}
         />
       ) : null}
+      <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-medium tabular-nums text-cream">
+        {formatViews(props.views)} {props.views === 1 ? "View" : "Views"}
+      </span>
       {props.durationSec ? (
-        <span className="pointer-events-none absolute bottom-2 right-2 rounded-sm bg-black/75 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-cream">
+        <span className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-medium tabular-nums text-cream">
           {formatDuration(props.durationSec)}
         </span>
       ) : null}
@@ -291,7 +295,7 @@ export function VideoCard(props: VideoCardProps) {
           <div className="min-w-0">
             <Link
               href={`/watch/${props.id}`}
-              className="line-clamp-2 min-w-0 w-full text-sm font-semibold leading-snug hover:underline"
+              className={`min-w-0 w-full text-sm font-semibold leading-snug hover:underline ${titleOverflowClampClass(props.title)}`}
             >
               {props.title}
             </Link>
@@ -301,9 +305,7 @@ export function VideoCard(props: VideoCardProps) {
             >
               {props.channel.name}
             </Link>
-            <div className="text-xs text-muted">
-              {formatViews(props.views)} · {timeAgo(props.createdAt)}
-            </div>
+            <div className="text-xs text-muted">{timeAgo(props.createdAt)}</div>
           </div>
         </div>
       </div>

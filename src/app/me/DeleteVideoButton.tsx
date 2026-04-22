@@ -48,7 +48,9 @@ export function DeleteVideoButton({
         {pending ? "Deleting…" : "Delete"}
       </button>
       {error ? (
-        <span className="text-[10px] text-danger">{error}</span>
+        <span className="max-w-[220px] rounded-md border border-danger-border bg-danger-bg px-2 py-1 text-center text-[10px] leading-snug text-danger">
+          {error}
+        </span>
       ) : null}
     </span>
   );

@@ -8,6 +8,7 @@ import {
   ensureChannelForUser,
 } from "@/lib/slug";
 import { formatDuration, formatViews } from "@/lib/format";
+import { titleOverflowClampClass } from "@/lib/titleClamp";
 
 import { ChannelEditCard } from "./ChannelEditCard";
 import { ContentFilterCard } from "./ContentFilterCard";
@@ -73,20 +74,20 @@ export default async function ProfilePage() {
         <div className="flex items-center gap-2">
           <Link
             href={`/c/${channel.slug}`}
-            className="rounded-full bg-accent-blue px-3 py-1.5 text-sm font-medium text-white shadow-retro-sm transition-colors hover:bg-accent-blue-hover active:brightness-95"
+            className="rounded-full bg-accent-blue px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-blue-hover active:brightness-95"
           >
             View public page
           </Link>
           <Link
             href="/upload"
-            className="rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-on-accent shadow-retro-sm transition-colors hover:bg-accent-hover active:brightness-95"
+            className="rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors hover:bg-accent-hover active:brightness-95"
           >
             Upload video
           </Link>
           <form action={signOutFromProfile}>
             <button
               type="submit"
-              className="rounded-full bg-accent-red px-3 py-1.5 text-sm font-medium text-white shadow-retro-sm transition-colors hover:bg-accent-red-hover active:brightness-95"
+              className="rounded-full bg-accent-red px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-red-hover active:brightness-95"
             >
               Sign out
             </button>
@@ -160,7 +161,7 @@ export default async function ProfilePage() {
                       </div>
                     )}
                     {v.durationSec ? (
-                      <span className="absolute bottom-1.5 right-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-cream">
+                      <span className="absolute bottom-1.5 right-1.5 rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-medium tabular-nums text-cream">
                         {formatDuration(v.durationSec)}
                       </span>
                     ) : null}
@@ -170,7 +171,7 @@ export default async function ProfilePage() {
                     <div className="flex items-start gap-2">
                       <Link
                         href={`/watch/${v.id}`}
-                        className="line-clamp-2 text-sm font-medium leading-snug"
+                        className={`min-w-0 flex-1 text-sm font-medium leading-snug ${titleOverflowClampClass(v.title)}`}
                       >
                         {v.title}
                       </Link>

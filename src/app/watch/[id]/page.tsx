@@ -13,6 +13,7 @@ import {
   ratingFilterWhere,
 } from "@/lib/viewerPrefs";
 import { auth } from "@/lib/auth";
+import { titleOverflowClampClass } from "@/lib/titleClamp";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,11 @@ export default async function WatchPage({
             Content hidden by your filter
           </span>
         </div>
-        <h1 className="text-2xl font-semibold leading-tight">{video.title}</h1>
+        <h1
+          className={`w-full min-w-0 max-w-full text-2xl font-semibold leading-tight ${titleOverflowClampClass(video.title)}`}
+        >
+          {video.title}
+        </h1>
         {meta ? (
           <p className="max-w-lg text-sm text-muted">{meta.description}</p>
         ) : null}
@@ -122,7 +127,9 @@ export default async function WatchPage({
           <VideoPlayer src={video.sourceUrl} title={video.title} />
 
           <div className="mt-4 flex items-start gap-2">
-            <h1 className="flex-1 text-xl font-semibold leading-tight">
+            <h1
+              className={`flex-1 min-w-0 text-xl font-semibold leading-tight ${titleOverflowClampClass(video.title)}`}
+            >
               {video.title}
             </h1>
             <div className="flex shrink-0 items-center gap-2">
