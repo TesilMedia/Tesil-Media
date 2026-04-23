@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import path from "node:path";
 
@@ -24,7 +24,10 @@ import { prisma } from "@/lib/prisma";
 
 import { ensureChannelForUser } from "@/lib/slug";
 import {
-  buildQualityLadderFiles,
+  buildInitialQualityLadder,
+  encodeEachRemainingRung,
+  expectedTranscodedRungCount,
+  parseQualityVariantsJson,
   type VideoQualityRendition,
   unlinkRungFilesForVideoId,
 } from "@/lib/videoQualities";
@@ -589,15 +592,14 @@ export async function POST(req: Request) {
 
   let ladder: VideoQualityRendition[];
 
+  let sourceHeight: number;
+
   try {
-    ladder = await buildQualityLadderFiles(
-      videoId,
-      inputAbs,
-      publicVideoUrl,
-      VIDEO_DIR,
-    );
+    const built = await buildInitialQualityLadder(inputAbs, publicVideoUrl);
+    ladder = built.ladder;
+    sourceHeight = built.sourceHeight;
   } catch (err) {
-    console.error("Transcode / probe failed:", err);
+    console.error("Probe failed:", err);
     await unlink(inputAbs).catch(() => {});
     if (parsed.thumbFileName) {
       await unlink(path.join(THUMB_DIR, parsed.thumbFileName)).catch(() => {});
@@ -612,6 +614,8 @@ export async function POST(req: Request) {
     );
   }
 
+  const extraRungs = expectedTranscodedRungCount(sourceHeight);
+
   const video = await prisma.video.create({
     data: {
       id: videoId,
@@ -624,12 +628,53 @@ export async function POST(req: Request) {
       channelId: channel.id,
       durationSec: parsed.durationSec,
       qualityVariantsJson: JSON.stringify(ladder),
+      transcodePending: extraRungs > 0,
     },
   });
 
+  if (extraRungs > 0) {
+    after(async () => {
+      try {
+        await encodeEachRemainingRung(
+          video.id,
+          inputAbs,
+          VIDEO_DIR,
+          sourceHeight,
+          async (rung) => {
+            const row = await prisma.video.findUnique({
+              where: { id: video.id },
+              select: { qualityVariantsJson: true },
+            });
+            if (!row) return;
+            const existing =
+              parseQualityVariantsJson(row.qualityVariantsJson) ?? [];
+            existing.push(rung);
+            await prisma.video.update({
+              where: { id: video.id },
+              data: {
+                qualityVariantsJson: JSON.stringify(existing),
+              },
+            });
+          },
+        );
+      } catch (e) {
+        console.error("Background transcode:", e);
+      } finally {
+        await prisma.video
+          .update({
+            where: { id: video.id },
+            data: { transcodePending: false },
+          })
+          .catch(() => {});
+      }
+    });
+  }
 
-
-  return NextResponse.json({ ok: true, id: video.id });
+  return NextResponse.json({
+    ok: true,
+    id: video.id,
+    transcodePending: extraRungs > 0,
+  });
 
 }
 

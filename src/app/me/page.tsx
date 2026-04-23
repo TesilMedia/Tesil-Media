@@ -15,6 +15,7 @@ import { ContentFilterCard } from "./ContentFilterCard";
 import { DeleteVideoButton } from "./DeleteVideoButton";
 import { GoLiveCard } from "./GoLiveCard";
 import { RatingBadge } from "@/components/RatingBadge";
+import { VideoCardTranscodeProgress } from "@/components/VideoCardTranscodeProgress";
 import { parseHiddenRatings } from "@/lib/ratings";
 export const dynamic = "force-dynamic";
 
@@ -160,8 +161,12 @@ export default async function ProfilePage() {
                         No thumbnail
                       </div>
                     )}
+                    <VideoCardTranscodeProgress
+                      videoId={v.id}
+                      initiallyPending={v.transcodePending}
+                    />
                     {v.durationSec ? (
-                      <span className="absolute bottom-1.5 right-1.5 rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-medium tabular-nums text-cream">
+                      <span className="absolute right-1.5 top-1.5 z-[11] rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-medium tabular-nums text-cream">
                         {formatDuration(v.durationSec)}
                       </span>
                     ) : null}

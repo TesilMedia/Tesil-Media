@@ -48,5 +48,7 @@ export async function GET(
   return NextResponse.json({
     defaultUrl: video.sourceUrl,
     renditions,
+    /** True while lower rungs are still encoding; player may poll to refresh the ladder. */
+    transcodePending: video.transcodePending,
   });
 }

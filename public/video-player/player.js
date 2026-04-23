@@ -1761,7 +1761,8 @@
     if (!(qualityWrap instanceof HTMLElement)) {
       return;
     }
-    if (!Array.isArray(renditions) || renditions.length <= 1) {
+    /* Hide only when there are zero options; a single source rendition still shows the pill (label). */
+    if (!Array.isArray(renditions) || renditions.length === 0) {
       if (qualitySelectNative instanceof HTMLSelectElement) {
         qualitySelectNative.innerHTML = "";
         qualitySelectNative.hidden = true;
@@ -1877,6 +1878,11 @@
       .then((data) => {
         if (!data || !Array.isArray(data.renditions)) return;
         setQualityOptions(data.renditions);
+        if (data.transcodePending) {
+          window.setTimeout(function () {
+            fetchRenditionList(vid);
+          }, 2000);
+        }
       })
       .catch(() => {
         /* ignore */

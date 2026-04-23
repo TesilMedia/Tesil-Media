@@ -50,7 +50,7 @@ export function VideoPlayer({
   const iframeSrc = `${base}&autoplay=1`;
   return (
     <div
-      className={`relative w-full overflow-hidden rounded-lg bg-black ${
+      className={`relative w-full overflow-hidden rounded-lg bg-black shadow-2xl shadow-black/30 ${
         className ?? ""
       }`}
       style={{ aspectRatio: "16 / 9" }}

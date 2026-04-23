@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import path from "node:path";
-import { unlink } from "node:fs/promises";
+import { readdir, unlink } from "node:fs/promises";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
@@ -44,13 +44,58 @@ const schema = z.object({
   bannerUrl: nullableImage.optional(),
 });
 
+const CHANNEL_UPLOAD_DIR = path.join(
+  process.cwd(),
+  "public",
+  "uploads",
+  "channel",
+);
+
 function diskPathForChannelUploadUrl(
   publicUrl: string | null | undefined,
 ): string | null {
   if (!publicUrl || !publicUrl.startsWith("/uploads/channel/")) return null;
   if (!/^\/uploads\/channel\/[a-zA-Z0-9._-]+$/.test(publicUrl)) return null;
   const rel = publicUrl.replace(/^\//, "");
-  return path.join(process.cwd(), "public", rel);
+  const abs = path.join(process.cwd(), "public", rel);
+  const normalized = path.resolve(abs);
+  const root = path.resolve(CHANNEL_UPLOAD_DIR);
+  if (!normalized.startsWith(root)) return null;
+  return normalized;
+}
+
+function basenameFromChannelUploadUrl(
+  publicUrl: string | null | undefined,
+): string | null {
+  if (!publicUrl || !publicUrl.startsWith("/uploads/channel/")) return null;
+  if (!/^\/uploads\/channel\/[a-zA-Z0-9._-]+$/.test(publicUrl)) return null;
+  return path.basename(publicUrl);
+}
+
+/**
+ * Removes stale files from POST /api/channel/upload (same naming pattern as
+ * that route) so abandoned uploads do not accumulate on disk.
+ */
+async function cleanupOrphanChannelKindFiles(
+  channelId: string,
+  kind: "avatar" | "banner",
+  keepBasename: string | null,
+) {
+  const resolvedDir = path.resolve(CHANNEL_UPLOAD_DIR);
+  const prefix = `${channelId}-${kind}-`;
+  let names: string[];
+  try {
+    names = await readdir(CHANNEL_UPLOAD_DIR);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!name.startsWith(prefix)) continue;
+    if (keepBasename && name === keepBasename) continue;
+    const abs = path.resolve(CHANNEL_UPLOAD_DIR, name);
+    if (!abs.startsWith(resolvedDir)) continue;
+    await unlink(abs).catch(() => {});
+  }
 }
 
 export async function PATCH(req: Request) {
@@ -82,8 +127,14 @@ export async function PATCH(req: Request) {
     );
   }
 
-  const nextAvatar = parsed.data.avatarUrl ?? null;
-  const nextBanner = parsed.data.bannerUrl ?? null;
+  const nextAvatar =
+    "avatarUrl" in parsed.data
+      ? (parsed.data.avatarUrl ?? null)
+      : channel.avatarUrl;
+  const nextBanner =
+    "bannerUrl" in parsed.data
+      ? (parsed.data.bannerUrl ?? null)
+      : channel.bannerUrl;
 
   const oldAvatarDisk = diskPathForChannelUploadUrl(channel.avatarUrl);
   const oldBannerDisk = diskPathForChannelUploadUrl(channel.bannerUrl);
@@ -102,10 +153,21 @@ export async function PATCH(req: Request) {
     data: {
       name: parsed.data.name.trim(),
       description: parsed.data.description?.toString().trim() || null,
-      avatarUrl: nextAvatar,
-      bannerUrl: nextBanner,
+      ...(parsed.data.avatarUrl !== undefined ? { avatarUrl: nextAvatar } : {}),
+      ...(parsed.data.bannerUrl !== undefined ? { bannerUrl: nextBanner } : {}),
     },
   });
+
+  await cleanupOrphanChannelKindFiles(
+    channel.id,
+    "avatar",
+    basenameFromChannelUploadUrl(nextAvatar),
+  );
+  await cleanupOrphanChannelKindFiles(
+    channel.id,
+    "banner",
+    basenameFromChannelUploadUrl(nextBanner),
+  );
 
   return NextResponse.json({ ok: true, channel: { slug: updated.slug } });
 }

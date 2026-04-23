@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { ThumbnailFramePicker } from "@/components/ThumbnailFramePicker";
@@ -13,7 +13,15 @@ import {
 } from "@/lib/ratings";
 import { VideoCategory } from "@/lib/categories";
 
-type Status = "idle" | "uploading" | "processing" | "error" | "done";
+type Status =
+  | "idle"
+  | "uploading"
+  | "processing"
+  | "encoding"
+  | "error";
+
+const ENCODE_POLL_MS = 900;
+const ENCODE_MAX_WAIT_MS = 15 * 60 * 1000;
 
 export function UploadForm() {
   const router = useRouter();
@@ -27,9 +35,30 @@ export function UploadForm() {
   const [rating, setRating] = useState<ContentRating>(DEFAULT_VIDEO_RATING);
   const [category, setCategory] = useState<VideoCategory | null>(null);
   const [progress, setProgress] = useState<number>(0);
+  const [encodeProgress, setEncodeProgress] = useState<number>(0);
+  const [encodeDone, setEncodeDone] = useState<number>(0);
+  const [encodeTotal, setEncodeTotal] = useState<number>(0);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const xhrRef = useRef<XMLHttpRequest | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const encodeStartedAtRef = useRef<number>(0);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, []);
+
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
 
   function assignThumbnailInput(file: File | null) {
     const input = thumbInputRef.current;
@@ -40,8 +69,12 @@ export function UploadForm() {
   }
 
   function reset() {
+    stopPolling();
     setStatus("idle");
     setProgress(0);
+    setEncodeProgress(0);
+    setEncodeDone(0);
+    setEncodeTotal(0);
     setError(null);
     setVideoFile(null);
     setDurationSec(null);
@@ -56,8 +89,12 @@ export function UploadForm() {
 
   function cancel() {
     xhrRef.current?.abort();
+    stopPolling();
     setStatus("idle");
     setProgress(0);
+    setEncodeProgress(0);
+    setEncodeDone(0);
+    setEncodeTotal(0);
     setError(null);
   }
 
@@ -97,16 +134,73 @@ export function UploadForm() {
       setStatus("processing");
     });
     xhr.addEventListener("load", () => {
-      let body: { ok?: boolean; id?: string; error?: string } = {};
+      let body: {
+        ok?: boolean;
+        id?: string;
+        error?: string;
+        transcodePending?: boolean;
+      } = {};
       try {
         body = JSON.parse(xhr.responseText || "{}");
       } catch {
         // ignore
       }
       if (xhr.status >= 200 && xhr.status < 300 && body.id) {
-        setStatus("done");
-        router.push(`/watch/${body.id}`);
-        router.refresh();
+        if (body.transcodePending) {
+          setStatus("encoding");
+          setEncodeProgress(0);
+          encodeStartedAtRef.current = Date.now();
+
+          const videoId = body.id;
+
+          const pollOnce = async (): Promise<boolean> => {
+            try {
+              const res = await fetch(
+                `/api/videos/${encodeURIComponent(videoId)}/transcode-status`,
+              );
+              if (!res.ok) return false;
+              const j: {
+                pending?: boolean;
+                totalExtraQualities?: number;
+                completedExtraQualities?: number;
+              } = await res.json();
+              const total = j.totalExtraQualities ?? 0;
+              const done = j.completedExtraQualities ?? 0;
+              setEncodeTotal(total);
+              setEncodeDone(done);
+              if (total > 0) {
+                setEncodeProgress(
+                  Math.min(100, Math.round((done / total) * 100)),
+                );
+              } else {
+                setEncodeProgress(100);
+              }
+
+              const timedOut =
+                Date.now() - encodeStartedAtRef.current > ENCODE_MAX_WAIT_MS;
+              if (j.pending === false || timedOut) {
+                stopPolling();
+                router.push(`/watch/${videoId}`);
+                router.refresh();
+                return true;
+              }
+              return false;
+            } catch {
+              return false;
+            }
+          };
+
+          void (async () => {
+            if (await pollOnce()) return;
+            pollRef.current = setInterval(
+              () => void pollOnce(),
+              ENCODE_POLL_MS,
+            );
+          })();
+        } else {
+          router.push(`/watch/${body.id}`);
+          router.refresh();
+        }
       } else {
         setStatus("error");
         setError(body.error ?? `Upload failed (HTTP ${xhr.status}).`);
@@ -129,7 +223,10 @@ export function UploadForm() {
     xhr.send(fd);
   }
 
-  const uploading = status === "uploading" || status === "processing";
+  const uploading =
+    status === "uploading" ||
+    status === "processing" ||
+    status === "encoding";
 
   return (
     <form ref={formRef} onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -316,17 +413,30 @@ export function UploadForm() {
 
       {uploading ? (
         <div className="flex flex-col gap-2">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
-            <div
-              className="h-full bg-accent transition-[width] duration-150"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+          {status === "encoding" ? (
+            <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
+              <div
+                className="h-full bg-accent transition-[width] duration-150"
+                style={{ width: `${encodeProgress}%` }}
+              />
+            </div>
+          ) : (
+            <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
+              <div
+                className="h-full bg-accent transition-[width] duration-150"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          )}
           <div className="flex items-center justify-between text-xs text-muted">
             <span>
-              {status === "processing"
-                ? "Processing on server…"
-                : `Uploading… ${progress}%`}
+              {status === "encoding"
+                ? encodeTotal > 0
+                  ? `Encoding more qualities… ${encodeDone}/${encodeTotal} (${encodeProgress}%)`
+                  : "Finishing…"
+                : status === "processing"
+                  ? "Saving and checking video…"
+                  : `Uploading… ${progress}%`}
             </span>
             <button
               type="button"
@@ -345,7 +455,11 @@ export function UploadForm() {
           disabled={uploading}
           className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-60"
         >
-          {uploading ? "Uploading…" : "Upload"}
+          {uploading
+            ? status === "encoding"
+              ? "Publishing…"
+              : "Uploading…"
+            : "Upload"}
         </button>
         {!uploading && (videoName || thumbName) ? (
           <button

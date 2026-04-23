@@ -13,7 +13,16 @@ export type VideoQualityRendition = {
   height: number;
 };
 
-const RUNGS: readonly number[] = [1080, 720, 480, 360];
+export const QUALITY_RUNGS: readonly number[] = [1080, 720, 480, 360];
+
+/** How many ffmpeg ladder outputs we will generate for this source height (excludes original). */
+export function expectedTranscodedRungCount(sourceHeight: number): number {
+  let n = 0;
+  for (const rung of QUALITY_RUNGS) {
+    if (sourceHeight > rung) n++;
+  }
+  return n;
+}
 
 /** Human-readable height label (e.g. 1080 → "1080p"). */
 export function heightToDisplayLabel(height: number): string {
@@ -32,6 +41,19 @@ function isRenditionList(v: unknown): v is VideoQualityRendition[] {
   return v.length > 0;
 }
 
+/** Parses stored ladder JSON; returns null if missing or invalid. */
+export function parseQualityVariantsJson(
+  raw: string | null | undefined,
+): VideoQualityRendition[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return isRenditionList(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Deletable transcode files (excludes the original upload at `sourceUrl`).
  */
@@ -39,14 +61,8 @@ export function collectVariantPublicUrls(
   qualityVariantsJson: string | null | undefined,
   sourceUrl: string | null | undefined,
 ): string[] {
-  if (!qualityVariantsJson) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(qualityVariantsJson) as unknown;
-  } catch {
-    return [];
-  }
-  if (!isRenditionList(parsed)) return [];
+  const parsed = parseQualityVariantsJson(qualityVariantsJson);
+  if (!parsed) return [];
   const urls = new Set<string>();
   for (const r of parsed) {
     if (r.url && r.url !== sourceUrl) urls.add(r.url);
@@ -58,7 +74,7 @@ export async function unlinkRungFilesForVideoId(
   videoId: string,
   videoDir: string,
 ): Promise<void> {
-  for (const rung of RUNGS) {
+  for (const rung of QUALITY_RUNGS) {
     await unlink(path.join(videoDir, `${videoId}-${rung}p.mp4`)).catch(
       () => {},
     );
@@ -121,31 +137,39 @@ async function encodeLadderRung(
 }
 
 /**
- * Probes the source, encodes every lower rung (1080p → 360p) where the source
- * is taller than that rung, and returns the full quality list (highest first).
- * Thrown errors mean the upload should be rolled back; partial files should be
- * removed with `unlinkRungFilesForVideoId`.
+ * Probes the source and returns a single-rendition ladder (source only).
+ * Used to publish immediately; lower rungs are encoded in the background.
  */
-export async function buildQualityLadderFiles(
-  videoId: string,
+export async function buildInitialQualityLadder(
   inputAbs: string,
   sourcePublicUrl: string,
-  videoDir: string,
-): Promise<VideoQualityRendition[]> {
+): Promise<{ ladder: VideoQualityRendition[]; sourceHeight: number }> {
   const sourceHeight = await probeVideoHeight(inputAbs);
   if (sourceHeight == null) {
     throw new Error("Could not read video dimensions (is ffprobe installed?)");
   }
-
-  const list: VideoQualityRendition[] = [
+  const ladder: VideoQualityRendition[] = [
     {
       label: heightToDisplayLabel(sourceHeight),
       url: sourcePublicUrl,
       height: sourceHeight,
     },
   ];
+  return { ladder, sourceHeight };
+}
 
-  for (const rung of RUNGS) {
+/**
+ * Encodes each ladder rung below source height and calls `onRungEncoded` after
+ * each file is written. Stops on first ffmpeg error (partial ladder may exist).
+ */
+export async function encodeEachRemainingRung(
+  videoId: string,
+  inputAbs: string,
+  videoDir: string,
+  sourceHeight: number,
+  onRungEncoded: (rung: VideoQualityRendition) => Promise<void>,
+): Promise<void> {
+  for (const rung of QUALITY_RUNGS) {
     if (sourceHeight <= rung) continue;
     const outName = `${videoId}-${rung}p.mp4`;
     const outAbs = path.join(videoDir, outName);
@@ -158,12 +182,10 @@ export async function buildQualityLadderFiles(
         `Transcoding failed at ${rung}p. Ensure ffmpeg is installed and the file is a valid video.`,
       );
     }
-    list.push({
+    await onRungEncoded({
       label: `${rung}p`,
       url: `/uploads/videos/${outName}`,
       height: rung,
     });
   }
-
-  return list;
 }

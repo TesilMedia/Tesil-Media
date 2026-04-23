@@ -94,6 +94,8 @@ model Video {
   sourceUrl   String
   // JSON array of { label, url, height } for transcoded rungs. SQLite: stored as String.
   qualityVariantsJson String?
+  // True while lower-quality renditions are still being encoded after publish (see upload flow).
+  transcodePending    Boolean  @default(false)
   thumbnail   String?
   durationSec Int?
   views       Int      @default(0)

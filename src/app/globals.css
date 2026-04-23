@@ -302,21 +302,46 @@ h3 {
   letter-spacing: calc(0.01em + 1px);
 }
 
-/* Retro-tinted scrollbars — react to the current theme. */
+/* Retro-tinted scrollbars — tricolor blue / orange / red.
+   Do not set scrollbar-color / scrollbar-width on all elements: Chromium treats
+   that as standard scrollbar styling and skips the ::-webkit-scrollbar gradient. */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--retro-orange), var(--retro-red));
+  /* Smooth stops so short thumbs still read blue → orange → red */
+  background: linear-gradient(
+    to bottom,
+    var(--retro-blue) 0%,
+    var(--retro-orange) 50%,
+    var(--retro-red) 100%
+  );
   border-radius: 10px;
   border: 2px solid var(--color-bg);
 }
+::-webkit-scrollbar-thumb:horizontal {
+  background: linear-gradient(
+    to right,
+    var(--retro-blue) 0%,
+    var(--retro-orange) 50%,
+    var(--retro-red) 100%
+  );
+}
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(
-    180deg,
-    var(--color-accent-hover),
-    var(--color-accent-red-hover)
+    to bottom,
+    var(--color-accent-blue-hover) 0%,
+    var(--color-accent-hover) 50%,
+    var(--color-accent-red-hover) 100%
+  );
+}
+::-webkit-scrollbar-thumb:horizontal:hover {
+  background: linear-gradient(
+    to right,
+    var(--color-accent-blue-hover) 0%,
+    var(--color-accent-hover) 50%,
+    var(--color-accent-red-hover) 100%
   );
 }
 ::-webkit-scrollbar-track {
