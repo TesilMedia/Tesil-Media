@@ -450,7 +450,8 @@ body.page--embed-host {
  * and selection handles. Range inputs keep their existing touch-action for scrubbing.
  */
 .player__hud button,
-.player__hud .player__rate-select,
+.player__hud .player__dropdown-trigger,
+.player__hud .player__select-overlay-native,
 .player__hud .player__time,
 .player__hud input[type="range"] {
   -webkit-touch-callout: none;
@@ -459,7 +460,8 @@ body.page--embed-host {
 }
 
 .player__hud button,
-.player__hud .player__rate-select {
+.player__hud .player__dropdown-trigger,
+.player__hud .player__select-overlay-native {
   touch-action: manipulation;
 }
 
@@ -768,7 +770,7 @@ body.page--embed-host {
   padding: 0;
   background: var(--chrome-control-bg);
   border: 1px solid var(--chrome-control-border);
-  border-radius: 8px;
+  border-radius: 9999px;
   overflow: hidden;
 }
 
@@ -823,7 +825,7 @@ body.page--embed-host {
   background: var(--chrome-control-bg);
   color: var(--color-text);
   padding: 0 clamp(0.18rem, 0.06rem + 1.1cqw, 0.7rem);
-  border-radius: 6px;
+  border-radius: 9999px;
   cursor: pointer;
   font-size: var(--chrome-font-size);
   font-weight: 600;
@@ -960,7 +962,7 @@ body.page--embed-host {
   padding: 0;
   background: var(--chrome-control-bg);
   border: 1px solid var(--chrome-control-border);
-  border-radius: 8px;
+  border-radius: 9999px;
   overflow: hidden;
 }
 
@@ -1019,8 +1021,9 @@ body.page--embed-host {
   padding: 0;
   background: var(--chrome-control-bg);
   border: 1px solid var(--chrome-control-border);
-  border-radius: 8px;
-  overflow: hidden;
+  border-radius: 9999px;
+  /* Allow custom speed / quality menus to paint outside the pill (see `.player__dropdown-panel`). */
+  overflow: visible;
 }
 
 .player__rate .player__btn {
@@ -1050,8 +1053,86 @@ body.page--embed-host {
   justify-content: center;
 }
 
-.player__rate-select {
+/*
+ * Coarse / narrow viewports: same custom pill (`.player__dropdown-trigger`); a transparent
+ * `<select>` sits on top so the OS / hardware picker opens while the label stays in our chrome.
+ * Desktop: overlay select is display:none — only the custom menu + trigger are used.
+ */
+.player .player__select-overlay-native {
+  display: none !important;
+}
+
+.player__dropdown-pillWithNative {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-self: stretch;
+}
+
+.player.player--native-dropdowns .player__select-overlay-native {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  display: block !important;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+  opacity: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  color: transparent;
+  background: transparent;
+  font: inherit;
+  /* ≥16px avoids some mobile browsers zooming the page on focus. */
+  font-size: max(1rem, 16px);
+  line-height: 1.2;
+}
+
+.player.player--native-dropdowns
+  .player__select-overlay-native[hidden] {
+  display: none !important;
+}
+
+.player.player--native-dropdowns
+  .player__dropdown-pillWithNative
+  .player__dropdown-trigger {
+  pointer-events: none;
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.player.player--native-dropdowns .player__dropdown-panel {
+  display: none !important;
+  visibility: hidden;
+}
+
+/* Custom dropdown: trigger + popover (replaces native <select> for rate on desktop). */
+.player__dropdown {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  min-width: 0;
+}
+
+.player__dropdown-trigger {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   min-width: 0;
   height: 100%;
@@ -1060,34 +1141,123 @@ body.page--embed-host {
   font-size: var(--chrome-font-size);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
+  font-family: inherit;
   color: var(--color-text);
-  background-color: transparent;
-  background-image: none;
+  background: transparent;
   border: none;
   box-shadow: none;
-  border-radius: 6px;
+  border-radius: 9999px;
+  opacity: 0.9;
   padding: 0 clamp(0.12rem, 0.04rem + 0.85cqw, 0.45rem);
   cursor: pointer;
-  text-align: center;
-  text-align-last: center;
   -webkit-appearance: none;
-  -moz-appearance: none;
   appearance: none;
 }
 
-.player__rate-select::-ms-expand {
-  display: none;
+.player__dropdown-trigger:hover {
+  background: var(--chrome-control-bg-hover);
 }
 
-/* Native option menus often ignore transparency; solid fill keeps lists readable. */
-.player__rate-select option {
-  background: #52605f;
+.player__dropdown-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 8;
+  min-width: 100%;
+  margin-top: 0.2rem;
+  padding: 0.25rem 0;
+  max-height: min(50vh, 12rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--chrome-control-bg);
+  border: 1px solid var(--chrome-control-border);
+  border-radius: 10px;
+  box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.2);
+  opacity: 0.98;
+  transform-origin: top center;
+  animation: dropdown-extend 0.15s ease-out;
+}
+
+@keyframes dropdown-extend {
+  from { opacity: 0; transform: scaleY(0.8); }
+  to   { opacity: 0.98; transform: scaleY(1); }
+}
+
+.player__rate .player__dropdown-panel {
+  max-height: none;
+  overflow-y: visible;
+}
+
+.player__dropdown-option {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.35em 0.8em;
+  text-align: left;
+  font-size: var(--chrome-font-size);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  font-family: inherit;
   color: var(--color-text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.player__dropdown-option:hover,
+.player__dropdown-option:focus-visible {
+  background: var(--chrome-control-bg-hover);
+  outline: none;
+}
+
+.player__dropdown-option--selected {
+  font-weight: 600;
+  background: var(--chrome-control-bg-hover);
+}
+
+.player__quality {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  min-width: 0;
+  height: var(--chrome-control-height);
+  padding: 0;
+  background: var(--chrome-control-bg);
+  border: 1px solid var(--chrome-control-border);
+  border-radius: 9999px;
+  overflow: visible;
+}
+
+.player__quality .player__quality-select-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  justify-content: center;
+  min-width: 4.5rem;
+  flex: 1 1 auto;
+}
+
+.player__quality .player__dropdown {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.player__quality .player__dropdown-trigger {
+  width: 100%;
+}
+
+.player__quality .player__dropdown-pillWithNative {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* One pill: mute + horizontal rail (always visible; rail width scales with `--vol-rail-expanded`). */
 .player__volume {
-  --volume-pill-radius: 8px;
+  --volume-pill-radius: 9999px;
   box-sizing: border-box;
   display: inline-flex;
   align-items: stretch;

@@ -149,18 +149,44 @@
               −
             </button>
             <div class="player__rate-select-wrap" data-tooltip="Playback speed ([ / ])">
-              <select id="playbackRate" class="player__rate-select" aria-label="Playback speed">
-                <option value="0.25">0.25×</option>
-                <option value="0.5">0.5×</option>
-                <option value="0.75">0.75×</option>
-                <option value="1" selected>1×</option>
-                <option value="1.25">1.25×</option>
-                <option value="1.5">1.5×</option>
-                <option value="1.75">1.75×</option>
-                <option value="2">2×</option>
-                <option value="2.5">2.5×</option>
-                <option value="3">3×</option>
-              </select>
+              <div class="player__dropdown" id="playbackRateDropdown">
+                <div class="player__dropdown-pillWithNative" id="playbackRatePillHost">
+                  <button
+                    type="button"
+                    class="player__dropdown-trigger"
+                    id="playbackRateTrigger"
+                    aria-label="Playback speed"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    aria-controls="playbackRatePanel"
+                  >
+                    <span id="playbackRateLabel">1×</span>
+                  </button>
+                  <select
+                    id="playbackRateNative"
+                    class="player__select-overlay-native"
+                    aria-label="Playback speed"
+                    tabindex="0"
+                  >
+                    <option value="0.25">0.25×</option>
+                    <option value="0.5">0.5×</option>
+                    <option value="0.75">0.75×</option>
+                    <option value="1" selected>1×</option>
+                    <option value="1.25">1.25×</option>
+                    <option value="1.5">1.5×</option>
+                    <option value="1.75">1.75×</option>
+                    <option value="2">2×</option>
+                    <option value="2.5">2.5×</option>
+                    <option value="3">3×</option>
+                  </select>
+                </div>
+                <div
+                  class="player__dropdown-panel"
+                  id="playbackRatePanel"
+                  role="listbox"
+                  hidden
+                ></div>
+              </div>
             </div>
             <button
               type="button"
@@ -171,6 +197,39 @@
             >
               +
             </button>
+          </div>
+
+          <div class="player__quality" id="qualityWrap" hidden>
+            <div class="player__quality-select-wrap" data-tooltip="Quality">
+              <div class="player__dropdown" id="qualityDropdown">
+                <div class="player__dropdown-pillWithNative" id="qualityPillHost">
+                  <button
+                    type="button"
+                    class="player__dropdown-trigger"
+                    id="qualityTrigger"
+                    aria-label="Quality"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    aria-controls="qualityPanel"
+                  >
+                    <span id="qualityLabel">—</span>
+                  </button>
+                  <select
+                    id="qualitySelectNative"
+                    class="player__select-overlay-native"
+                    aria-label="Quality"
+                    tabindex="0"
+                    hidden
+                  ></select>
+                </div>
+                <div
+                  class="player__dropdown-panel"
+                  id="qualityPanel"
+                  role="listbox"
+                  hidden
+                ></div>
+              </div>
+            </div>
           </div>
         </div>
 

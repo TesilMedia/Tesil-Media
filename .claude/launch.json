@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Next.js",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "Media Server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--env-file=.env", "scripts/media-server.mjs"],
+      "port": 8000
+    }
+  ]
+}

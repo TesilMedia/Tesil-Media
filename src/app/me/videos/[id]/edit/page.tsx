@@ -52,7 +52,11 @@ export default async function EditVideoPage({
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <div>
-          <VideoPlayer src={video.sourceUrl} title={video.title} />
+          <VideoPlayer
+            src={video.sourceUrl}
+            videoId={video.id}
+            title={video.title}
+          />
           <p className="mt-2 break-all text-xs text-muted">
             Source: <code>{video.sourceUrl}</code>
           </p>

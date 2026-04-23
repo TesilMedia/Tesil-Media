@@ -28,6 +28,7 @@ model User {
   channel        Channel?
   sessions       Session[]
   accounts       Account[]
+  comments       Comment[]
 }
 
 model Account {
@@ -91,6 +92,8 @@ model Video {
   // Source URL — can be a YouTube/Vimeo/Twitch link OR a direct MP4/HLS URL.
   // The Tesil Video Player handles all of these natively.
   sourceUrl   String
+  // JSON array of { label, url, height } for transcoded rungs. SQLite: stored as String.
+  qualityVariantsJson String?
   thumbnail   String?
   durationSec Int?
   views       Int      @default(0)
@@ -105,10 +108,38 @@ model Video {
   channelId String
   channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
+  comments  Comment[]
+
   @@index([channelId])
   @@index([createdAt])
   @@index([rating])
   @@index([category])
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  body      String
+  createdAt DateTime  @default(now())
+  // Set the first time a comment is edited (and on every edit thereafter).
+  // Null means never edited — used by the UI to show "(edited)".
+  editedAt  DateTime?
+
+  videoId String
+  video   Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Self-referential parent for threaded replies. Threads are intentionally
+  // flat: a reply's parentId always points at a root comment (the API
+  // collapses reply-to-reply into reply-to-root). Cascade so deleting a root
+  // tears down its replies.
+  parentId String?
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[] @relation("CommentReplies")
+
+  @@index([videoId, createdAt])
+  @@index([parentId])
 }
 
 model LiveStream {

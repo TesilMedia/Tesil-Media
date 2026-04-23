@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { VideoCard } from "@/components/VideoCard";
 import { RatingBadge } from "@/components/RatingBadge";
+import { Comments, type CommentDTO } from "@/components/Comments";
 import { formatViews } from "@/lib/format";
 import { RATING_META, isContentRating } from "@/lib/ratings";
 import { normaliseCategory } from "@/lib/categories";
@@ -102,29 +103,80 @@ export default async function WatchPage({
 
   const ratingWhere = ratingFilterWhere(hidden);
   const relatedCategory = normaliseCategory(video.category);
-  const related = await prisma.video.findMany({
-    where: {
-      AND: [
-        {
-          id: { not: video.id },
-          OR: [
-            { channelId: video.channelId },
-            ...(relatedCategory ? [{ category: relatedCategory }] : []),
-          ],
+  const [related, commentRows] = await Promise.all([
+    prisma.video.findMany({
+      where: {
+        AND: [
+          {
+            id: { not: video.id },
+            OR: [
+              { channelId: video.channelId },
+              ...(relatedCategory ? [{ category: relatedCategory }] : []),
+            ],
+          },
+          ratingWhere,
+        ],
+      },
+      include: { channel: true },
+      orderBy: { views: "desc" },
+      take: 8,
+    }),
+    prisma.comment.findMany({
+      where: { videoId: video.id },
+      orderBy: { createdAt: "desc" },
+      take: 500,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            channel: { select: { slug: true, name: true, avatarUrl: true } },
+          },
         },
-        ratingWhere,
-      ],
+      },
+    }),
+  ]);
+
+  const initialComments: CommentDTO[] = commentRows.map((c) => ({
+    id: c.id,
+    body: c.body,
+    createdAt: c.createdAt.toISOString(),
+    editedAt: c.editedAt ? c.editedAt.toISOString() : null,
+    userId: c.userId,
+    parentId: c.parentId,
+    user: {
+      id: c.user.id,
+      name: c.user.channel?.name ?? c.user.name,
+      image: c.user.channel?.avatarUrl ?? c.user.image,
+      channelSlug: c.user.channel?.slug ?? null,
     },
-    include: { channel: true },
-    orderBy: { views: "desc" },
-    take: 8,
-  });
+  }));
+
+  const viewerChannel = session?.user?.id
+    ? await prisma.channel.findUnique({
+        where: { ownerId: session.user.id },
+        select: { slug: true, name: true, avatarUrl: true },
+      })
+    : null;
+
+  const viewer = session?.user?.id
+    ? {
+        id: session.user.id,
+        name: viewerChannel?.name ?? session.user.name ?? null,
+        image: viewerChannel?.avatarUrl ?? session.user.image ?? null,
+      }
+    : null;
 
   return (
     <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-6">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
-          <VideoPlayer src={video.sourceUrl} title={video.title} />
+          <VideoPlayer
+            src={video.sourceUrl}
+            videoId={video.id}
+            title={video.title}
+          />
 
           <div className="mt-4 flex items-start gap-2">
             <h1
@@ -177,6 +229,12 @@ export default async function WatchPage({
               {video.description}
             </p>
           ) : null}
+
+          <Comments
+            videoId={video.id}
+            initial={initialComments}
+            viewer={viewer}
+          />
         </div>
 
         <aside className="min-w-0">

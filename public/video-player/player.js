@@ -1,5 +1,21 @@
 (function () {
   const player = document.getElementById("player");
+  const useNativeDropdowns = (function () {
+    try {
+      if (window.matchMedia("(hover: none) and (pointer: coarse)").matches) {
+        return true;
+      }
+      if (window.matchMedia("(max-width: 640px)").matches) {
+        return true;
+      }
+    } catch (_) {
+      /* matchMedia may be unavailable in odd embeds */
+    }
+    return false;
+  })();
+  if (useNativeDropdowns && player) {
+    player.classList.add("player--native-dropdowns");
+  }
   const video = document.getElementById("video");
   const playPause = document.getElementById("playPause");
   const progress = document.getElementById("progress");
@@ -22,14 +38,38 @@
   const zoomResetBtn = document.getElementById("zoomReset");
   const zoomGroup = document.getElementById("zoomGroup");
   const zoomLabel = document.getElementById("zoomLabel");
-  const playbackRateSelect = document.getElementById("playbackRate");
+  const playbackRateTrigger = document.getElementById("playbackRateTrigger");
+  const playbackRateLabel = document.getElementById("playbackRateLabel");
+  const playbackRatePanel = document.getElementById("playbackRatePanel");
+  const playbackRateDropdown = document.getElementById("playbackRateDropdown");
   const rateDownBtn = document.getElementById("rateDown");
   const rateUpBtn = document.getElementById("rateUp");
   const tooltipLayer = document.getElementById("tooltipLayer");
+  /** Set when `#tooltipLayer` is wired; used by custom dropdowns to dismiss the label. */
+  let hidePlayerTooltip = function () {};
   const frameBackBtn = document.getElementById("frameBack");
   const frameForwardBtn = document.getElementById("frameForward");
   const goLiveBtn = document.getElementById("goLive");
-  const ratePill = player.querySelector(".player__rate");
+  const qualityWrap = document.getElementById("qualityWrap");
+  const qualityTrigger = document.getElementById("qualityTrigger");
+  const qualityLabel = document.getElementById("qualityLabel");
+  const qualityPanel = document.getElementById("qualityPanel");
+  const qualityDropdown = document.getElementById("qualityDropdown");
+  const playbackRateNative = document.getElementById("playbackRateNative");
+  const qualitySelectNative = document.getElementById("qualitySelectNative");
+  if (useNativeDropdowns) {
+    if (playbackRateTrigger) {
+      playbackRateTrigger.setAttribute("aria-hidden", "true");
+      playbackRateTrigger.setAttribute("tabindex", "-1");
+    }
+    if (qualityTrigger) {
+      qualityTrigger.setAttribute("aria-hidden", "true");
+      qualityTrigger.setAttribute("tabindex", "-1");
+    }
+  }
+  const ratePill = player && player.querySelector
+    ? player.querySelector(".player__rate")
+    : null;
   const chromeEl = player.querySelector(".player__chrome");
   const cornerTools = player.querySelector(".player__corner-tools");
   const cornerVolume = player.querySelector(".player__corner-volume");
@@ -67,6 +107,7 @@
   const startupAutoplay = ["1", "true", "yes"].includes(
     String(startupQuery.get("autoplay") || "").toLowerCase()
   );
+  const startupVideoId = String(startupQuery.get("vid") || "").trim();
   /**
    * Thumbnail / host UI loads the embed with no `src=`, then passes a `File` via
    * `postMessage` (object URLs in `?src=` do not work across documents for blob:).
@@ -764,13 +805,17 @@
     if (!(zoomGroup instanceof HTMLElement) || !(ratePill instanceof HTMLElement)) return;
     const wZoom = zoomGroup.offsetWidth;
     ratePill.style.removeProperty("width");
+    if (qualityWrap instanceof HTMLElement) qualityWrap.style.removeProperty("width");
     const wNatural = Math.ceil(ratePill.getBoundingClientRect().width);
     if (wZoom <= 0) {
       if (wNatural > 0) ratePill.style.width = `${wNatural}px`;
       else ratePill.style.removeProperty("width");
       return;
     }
-    ratePill.style.width = `${Math.max(wZoom, wNatural)}px`;
+    const wTarget = Math.max(wZoom, wNatural);
+    ratePill.style.width = `${wTarget}px`;
+    if (qualityWrap instanceof HTMLElement)
+      qualityWrap.style.width = `${wTarget}px`;
   }
 
   function applyZoomTransform() {
@@ -1610,7 +1655,7 @@
       instance.loadSource(abs);
       instance.attachMedia(video);
       video.playbackRate = 1;
-      playbackRateSelect.value = "1";
+      syncPlaybackRateSelect();
       updateTimeDisplay();
       return;
     }
@@ -1630,12 +1675,215 @@
     video.load();
     syncPreviewVideoSrc();
     video.playbackRate = 1;
-    playbackRateSelect.value = "1";
+    syncPlaybackRateSelect();
     if (hls) requestInitialLiveSeek();
     tryPlayLiveMedia();
     scheduleVodAutoplayWhenReady();
   }
 
+  /**
+   * Swaps progressive (non-HLS) file URL and restores playback time — used for quality ladder.
+   */
+  function switchProgressiveRendition(urlStr) {
+    const abs = resolveToAbsoluteHttpUrl(urlStr);
+    if (!abs) return;
+    if (isHlsUrl(abs)) {
+      loadVideoFromHttpUrl(urlStr);
+      return;
+    }
+    const currentAbs = (video.currentSrc || video.src || "").toString();
+    if (currentAbs === abs) return;
+    const t = video.currentTime;
+    const wasPlaying = !video.paused;
+    hasCustomSource = true;
+    exitYoutubeMode();
+    revokeBlobUrl();
+    detachHlsInstance();
+    video.hidden = false;
+    player.dataset.source = "native";
+    expectsLiveHlsPlayback = false;
+    syncPipVisibility();
+    video.src = abs;
+    const onErr = () => {
+      video.removeEventListener("error", onErr);
+      if (fileNameEl instanceof HTMLElement) {
+        fileNameEl.textContent =
+          "Could not load this quality. Try another or refresh the page.";
+      }
+    };
+    video.addEventListener("error", onErr, { once: true });
+    video.addEventListener(
+      "loadedmetadata",
+      function onMeta() {
+        video.removeEventListener("loadedmetadata", onMeta);
+        if (Number.isFinite(t) && t > 0) {
+          try {
+            video.currentTime = t;
+          } catch (_) {
+            /* seek may be rejected briefly */
+          }
+        }
+        syncPreviewVideoSrc();
+        video.playbackRate = 1;
+        syncPlaybackRateSelect();
+        syncNativeQualitySelectToCurrentVideoUrl();
+        updateTimeDisplay();
+        if (wasPlaying) {
+          video.play().catch(() => {});
+        }
+      },
+      { once: true }
+    );
+    video.load();
+  }
+
+  function closePlaybackRateDropdown() {
+    if (playbackRatePanel) playbackRatePanel.hidden = true;
+    if (playbackRateTrigger) {
+      playbackRateTrigger.setAttribute("aria-expanded", "false");
+    }
+    if (playbackRateDropdown && playbackRateDropdown.classList) {
+      playbackRateDropdown.classList.remove("player__dropdown--open");
+    }
+  }
+
+  function closeQualityDropdown() {
+    if (qualityPanel) qualityPanel.hidden = true;
+    if (qualityTrigger) {
+      qualityTrigger.setAttribute("aria-expanded", "false");
+    }
+    if (qualityDropdown && qualityDropdown.classList) {
+      qualityDropdown.classList.remove("player__dropdown--open");
+    }
+  }
+
+  function setQualityOptions(renditions) {
+    if (!(qualityWrap instanceof HTMLElement)) {
+      return;
+    }
+    if (!Array.isArray(renditions) || renditions.length <= 1) {
+      if (qualitySelectNative instanceof HTMLSelectElement) {
+        qualitySelectNative.innerHTML = "";
+        qualitySelectNative.hidden = true;
+      }
+      if (qualityPanel instanceof HTMLElement) qualityPanel.innerHTML = "";
+      if (qualityLabel) qualityLabel.textContent = "—";
+      qualityWrap.hidden = true;
+      closeQualityDropdown();
+      return;
+    }
+
+    const cur = (video.currentSrc || video.src || "").toString();
+    const fromQuery = resolveToAbsoluteHttpUrl(startupSourceFromQuery);
+    let bestIdx = 0;
+
+    if (useNativeDropdowns && qualitySelectNative instanceof HTMLSelectElement) {
+      qualitySelectNative.innerHTML = "";
+      for (let i = 0; i < renditions.length; i++) {
+        const r = renditions[i];
+        if (!r || !r.label || !r.url) continue;
+        const opt = document.createElement("option");
+        opt.value = r.url;
+        opt.textContent = r.label;
+        qualitySelectNative.appendChild(opt);
+      }
+      if (qualitySelectNative.options.length === 0) {
+        qualitySelectNative.hidden = true;
+        qualityWrap.hidden = true;
+        return;
+      }
+      for (let j = 0; j < qualitySelectNative.options.length; j++) {
+        const oa = resolveToAbsoluteHttpUrl(qualitySelectNative.options[j].value);
+        if (oa && (oa === cur || oa === fromQuery)) {
+          bestIdx = j;
+          break;
+        }
+      }
+      qualitySelectNative.selectedIndex = bestIdx;
+      if (qualityLabel && qualitySelectNative.options[bestIdx]) {
+        qualityLabel.textContent = qualitySelectNative.options[bestIdx].text;
+      }
+      qualitySelectNative.hidden = false;
+      qualityWrap.hidden = false;
+      syncRatePillWidthToZoom();
+      return;
+    }
+
+    if (
+      !(qualityPanel instanceof HTMLElement) ||
+      !(qualityLabel instanceof HTMLElement) ||
+      !(qualityTrigger instanceof HTMLElement)
+    ) {
+      return;
+    }
+    qualityPanel.innerHTML = "";
+    for (let i = 0; i < renditions.length; i++) {
+      const r = renditions[i];
+      if (!r || !r.label || !r.url) continue;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("role", "option");
+      btn.className = "player__dropdown-option";
+      btn.dataset.url = r.url;
+      btn.textContent = r.label;
+      qualityPanel.appendChild(btn);
+    }
+    const options = qualityPanel.querySelectorAll(".player__dropdown-option[data-url]");
+    if (options.length === 0) {
+      qualityWrap.hidden = true;
+      return;
+    }
+    for (let j = 0; j < options.length; j++) {
+      const oa = resolveToAbsoluteHttpUrl(options[j].getAttribute("data-url") || "");
+      if (oa && (oa === cur || oa === fromQuery)) {
+        bestIdx = j;
+        break;
+      }
+    }
+    for (let j = 0; j < options.length; j++) {
+      const sel = j === bestIdx;
+      options[j].setAttribute("aria-selected", sel ? "true" : "false");
+      options[j].classList.toggle("player__dropdown-option--selected", sel);
+    }
+    if (options[bestIdx]) qualityLabel.textContent = options[bestIdx].textContent;
+    qualityWrap.hidden = false;
+    syncRatePillWidthToZoom();
+  }
+
+  function syncNativeQualitySelectToCurrentVideoUrl() {
+    if (!useNativeDropdowns || !(qualitySelectNative instanceof HTMLSelectElement)) {
+      return;
+    }
+    if (qualitySelectNative.options.length === 0) {
+      return;
+    }
+    const cur = (video.currentSrc || video.src || "").toString();
+    for (let j = 0; j < qualitySelectNative.options.length; j++) {
+      const oa = resolveToAbsoluteHttpUrl(qualitySelectNative.options[j].value);
+      if (oa && oa === cur) {
+        qualitySelectNative.selectedIndex = j;
+        const o = qualitySelectNative.options[j];
+        if (qualityLabel && o) {
+          qualityLabel.textContent = o.text;
+        }
+        return;
+      }
+    }
+  }
+
+  function fetchRenditionList(vid) {
+    fetch(`/api/videos/${encodeURIComponent(vid)}/renditions`, { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data || !Array.isArray(data.renditions)) return;
+        setQualityOptions(data.renditions);
+      })
+      .catch(() => {
+        /* ignore */
+      });
+  }
+
+  /** A few follow-up fetches so lower rungs can appear while FFmpeg finishes in the background. */
   function tryLoadFromUrlString(raw) {
     const trimmed = String(raw || "").trim();
     if (!trimmed) return;
@@ -1683,7 +1931,7 @@
     video.load();
     syncPreviewVideoSrc();
     video.playbackRate = 1;
-    playbackRateSelect.value = "1";
+    syncPlaybackRateSelect();
     syncPipVisibility();
     video.play().catch(() => {});
   }
@@ -1702,7 +1950,7 @@
     video.load();
     syncPreviewVideoSrc();
     video.playbackRate = 1;
-    playbackRateSelect.value = "1";
+    syncPlaybackRateSelect();
     syncPipVisibility();
     if (expectsLiveHlsPlayback) requestInitialLiveSeek();
     tryPlayLiveMedia();
@@ -1774,6 +2022,9 @@
         urlInput.value = startupSourceFromQuery;
       }
       tryLoadFromUrlString(startupSourceFromQuery);
+    }
+    if (startupVideoId) {
+      fetchRenditionList(startupVideoId);
     }
     applyDemoSampleIfNeeded();
     window.setTimeout(applyDemoSampleIfNeeded, 350);
@@ -2237,6 +2488,21 @@
   /** Same rates on touch / no-hover as desktop (0.25×–3×); revisit if pitch/skip artifacts return on mobile WebKit. */
   const ACTIVE_PLAYBACK_RATES = PLAYBACK_RATES;
 
+  if (!useNativeDropdowns && playbackRatePanel instanceof HTMLElement) {
+    for (const rate of ACTIVE_PLAYBACK_RATES) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("role", "option");
+      btn.className = "player__dropdown-option";
+      btn.setAttribute("data-rate", String(rate));
+      btn.textContent = `${rate}×`;
+      const sel = Math.abs(rate - 1) < 0.0001;
+      btn.setAttribute("aria-selected", sel ? "true" : "false");
+      if (sel) btn.classList.add("player__dropdown-option--selected");
+      playbackRatePanel.appendChild(btn);
+    }
+  }
+
   /**
    * Mobile browsers can produce audible skip/repeat artifacts with pitch correction enabled while
    * changing playback speed. Prefer natural pitch-shift there for smoother time stretching.
@@ -2274,11 +2540,20 @@
   }
 
   function syncPlaybackRateOptionsUI() {
-    if (!(playbackRateSelect instanceof HTMLSelectElement)) return;
-    for (const opt of playbackRateSelect.options) {
+    if (useNativeDropdowns && playbackRateNative instanceof HTMLSelectElement) {
+      for (let i = 0; i < playbackRateNative.options.length; i++) {
+        playbackRateNative.options[i].disabled = false;
+        playbackRateNative.options[i].hidden = false;
+      }
+      return;
+    }
+    if (!playbackRatePanel) return;
+    for (const el of playbackRatePanel.querySelectorAll("[data-rate]")) {
       /* Keep every speed visible; actual rate is still clamped via `nearestPlaybackRate` / `applyPlaybackRate`. */
-      opt.disabled = false;
-      opt.hidden = false;
+      if (el instanceof HTMLButtonElement) {
+        el.disabled = false;
+        el.hidden = false;
+      }
     }
   }
 
@@ -2296,14 +2571,29 @@
     return bestI;
   }
 
-  function syncPlaybackRateSelect() {
-    const r = video.playbackRate;
-    const exact = ACTIVE_PLAYBACK_RATES.find((x) => Math.abs(x - r) < 0.0001);
-    if (exact !== undefined) {
-      playbackRateSelect.value = String(exact);
-    } else {
-      playbackRateSelect.value = String(ACTIVE_PLAYBACK_RATES[playbackRateIndex()]);
+  function setPlaybackRateSelectUI() {
+    const exact = nearestPlaybackRate(video.playbackRate);
+    if (useNativeDropdowns && playbackRateNative instanceof HTMLSelectElement) {
+      playbackRateNative.value = String(exact);
+      if (playbackRateLabel) {
+        playbackRateLabel.textContent = `${exact}×`;
+      }
+      return;
     }
+    if (!(playbackRateLabel instanceof HTMLElement) || !playbackRatePanel) {
+      return;
+    }
+    playbackRateLabel.textContent = `${exact}×`;
+    for (const el of playbackRatePanel.querySelectorAll("[data-rate]")) {
+      const v = Number(el.getAttribute("data-rate"));
+      const sel = Math.abs(v - exact) < 0.0001;
+      el.setAttribute("aria-selected", sel ? "true" : "false");
+      el.classList.toggle("player__dropdown-option--selected", sel);
+    }
+  }
+
+  function syncPlaybackRateSelect() {
+    setPlaybackRateSelectUI();
     requestAnimationFrame(() => syncRatePillWidthToZoom());
   }
 
@@ -2316,14 +2606,107 @@
       )
     );
     const next = applyPlaybackRate(ACTIVE_PLAYBACK_RATES[i]);
-    playbackRateSelect.value = String(next);
+    setPlaybackRateSelectUI();
     requestAnimationFrame(() => syncRatePillWidthToZoom());
   }
 
-  playbackRateSelect.addEventListener("change", () => {
-    const v = Number(playbackRateSelect.value);
-    if (Number.isFinite(v)) applyPlaybackRate(v);
-  });
+  if (!useNativeDropdowns) {
+    if (playbackRateTrigger) {
+      playbackRateTrigger.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!playbackRatePanel) return;
+        const open = playbackRatePanel.hidden;
+        if (open) {
+          closeQualityDropdown();
+          hidePlayerTooltip();
+          playbackRatePanel.hidden = false;
+          playbackRateTrigger.setAttribute("aria-expanded", "true");
+          if (playbackRateDropdown) playbackRateDropdown.classList.add("player__dropdown--open");
+        } else {
+          closePlaybackRateDropdown();
+        }
+      });
+    }
+    if (playbackRatePanel) {
+      playbackRatePanel.addEventListener("click", (e) => {
+        const raw = e.target;
+        if (!(raw instanceof Element)) return;
+        const btn = raw.closest("[data-rate]");
+        if (!btn) return;
+        e.preventDefault();
+        const v = Number(btn.getAttribute("data-rate"));
+        if (!Number.isFinite(v)) return;
+        applyPlaybackRate(v);
+        setPlaybackRateSelectUI();
+        closePlaybackRateDropdown();
+      });
+    }
+    if (qualityTrigger && qualityPanel) {
+      qualityTrigger.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (qualityPanel.hidden) {
+          closePlaybackRateDropdown();
+          hidePlayerTooltip();
+          qualityPanel.hidden = false;
+          qualityTrigger.setAttribute("aria-expanded", "true");
+          if (qualityDropdown) qualityDropdown.classList.add("player__dropdown--open");
+        } else {
+          closeQualityDropdown();
+        }
+      });
+    }
+    if (qualityPanel) {
+      qualityPanel.addEventListener("click", (e) => {
+        const raw = e.target;
+        if (!(raw instanceof Element)) return;
+        const btn = raw.closest(".player__dropdown-option[data-url]");
+        if (!btn) return;
+        e.preventDefault();
+        const url = btn.getAttribute("data-url");
+        if (url) switchProgressiveRendition(url);
+        if (qualityLabel) qualityLabel.textContent = (btn.textContent || "").trim() || "—";
+        for (const el of qualityPanel.querySelectorAll(".player__dropdown-option[data-url]")) {
+          const sel = el === btn;
+          el.setAttribute("aria-selected", sel ? "true" : "false");
+          el.classList.toggle("player__dropdown-option--selected", sel);
+        }
+        closeQualityDropdown();
+      });
+    }
+    document.addEventListener("pointerdown", (e) => {
+      if (!(e.target instanceof Node)) return;
+      if (playbackRateDropdown && playbackRateDropdown.contains(e.target)) return;
+      if (qualityDropdown && qualityDropdown.contains(e.target)) return;
+      closePlaybackRateDropdown();
+      closeQualityDropdown();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" && e.code !== "Escape") return;
+      closePlaybackRateDropdown();
+      closeQualityDropdown();
+    });
+  } else {
+    if (playbackRateNative) {
+      playbackRateNative.addEventListener("change", () => {
+        const v = Number(playbackRateNative.value);
+        if (Number.isFinite(v)) {
+          applyPlaybackRate(v);
+        }
+      });
+    }
+    if (qualitySelectNative) {
+      qualitySelectNative.addEventListener("change", () => {
+        const url = qualitySelectNative.value;
+        if (url) {
+          switchProgressiveRendition(url);
+        }
+        const o = qualitySelectNative.options[qualitySelectNative.selectedIndex];
+        if (o && qualityLabel) {
+          qualityLabel.textContent = o.text;
+        }
+      });
+    }
+  }
 
   wireHeldChromeButton(rateDownBtn, () => nudgePlaybackRate(-1));
   wireHeldChromeButton(rateUpBtn, () => nudgePlaybackRate(1));
@@ -3457,6 +3840,16 @@
       tooltipLayer.hidden = true;
       tooltipLayer.textContent = "";
     }
+    hidePlayerTooltip = hideTooltip;
+
+    function tooltipHostHasOpenDropdown(host) {
+      if (!host || !(host instanceof Element)) return false;
+      if (host.querySelector(".player__dropdown--open") != null) return true;
+      if (host.querySelector('.player__dropdown-trigger[aria-expanded="true"]') != null) {
+        return true;
+      }
+      return false;
+    }
 
     /** True if `node` is inside the interactive subtree of a `[data-tooltip]` host (not just a DOM ancestor). */
     function isPointerOverTooltipHost(node) {
@@ -3466,7 +3859,13 @@
       if (host.closest("#player")) {
         const tag = host.tagName;
         if (tag === "BUTTON" || tag === "LABEL" || tag === "SELECT") return true;
-        if (host.matches(".player__rate-select-wrap")) return true;
+        if (
+          host.matches(
+            ".player__rate-select-wrap, .player__quality-select-wrap, .player__dropdown"
+          )
+        ) {
+          return true;
+        }
         return false;
       }
       return true;
@@ -3475,6 +3874,10 @@
     function showTooltipFor(el) {
       const text = el.getAttribute("data-tooltip");
       if (!text) {
+        hideTooltip();
+        return;
+      }
+      if (tooltipHostHasOpenDropdown(el)) {
         hideTooltip();
         return;
       }
@@ -3516,6 +3919,10 @@
         }
         const el = e.target.closest("[data-tooltip]");
         if (!el) {
+          hideTooltip();
+          return;
+        }
+        if (tooltipHostHasOpenDropdown(el)) {
           hideTooltip();
           return;
         }

@@ -90,6 +90,137 @@
   --color-success-border: #256b78;
 }
 
+@layer components {
+  /*
+   * Comment reply tree connectors.
+   *
+   * The tree is drawn with a continuous vertical trunk aligned with the
+   * parent avatar's horizontal center. Each reply <li> draws:
+   *   - an elbow (::before) that meets the trunk and extends horizontally
+   *     to the left edge of the reply avatar,
+   *   - a trunk segment (::after) that continues down to the next reply
+   *     (omitted on the last reply so the trunk terminates at the elbow).
+   * A separate trunk extension on the <ul> rises upward into the parent
+   * row so the line visually originates from the parent avatar.
+   *
+   * Geometry (parent avatar is md = 36px, reply avatar is sm = 28px):
+   *   --comment-tree-trunk-x: x of the parent avatar's center relative to
+   *     the <ul>'s left edge.
+   *   --comment-tree-avatar-x: x of the reply avatar's left edge relative
+   *     to each <li>'s left edge.
+   *   --comment-tree-elbow-y: y of the reply avatar's vertical center
+   *     relative to each <li>'s top (14px for a 28px avatar).
+   *   --comment-tree-trunk-extend-top: how far the trunk rises above the
+   *     <ul> to reach the parent avatar's vertical center.
+   */
+  .comment-tree-children {
+    --comment-tree-trunk-x: 13px;
+    --comment-tree-avatar-x: 38px;
+    --comment-tree-elbow-y: 14px;
+    --comment-tree-trunk-extend-top: 0px;
+    --comment-tree-gap: 16px;
+    position: relative;
+  }
+  .comment-tree-children::before {
+    content: "";
+    position: absolute;
+    left: var(--comment-tree-trunk-x);
+    top: calc(-1 * var(--comment-tree-trunk-extend-top));
+    height: var(--comment-tree-trunk-extend-top);
+    border-left: 2px solid var(--color-border);
+    pointer-events: none;
+  }
+  .comment-tree-item {
+    position: relative;
+    padding-left: var(--comment-tree-avatar-x);
+  }
+  .comment-tree-item::before {
+    content: "";
+    position: absolute;
+    left: var(--comment-tree-trunk-x);
+    top: 0;
+    width: calc(var(--comment-tree-avatar-x) - var(--comment-tree-trunk-x));
+    height: var(--comment-tree-elbow-y);
+    border-left: 2px solid var(--color-border);
+    border-bottom: 2px solid var(--color-border);
+    /* Small radius keeps a long straight trunk before the bend (avoids a gap to ::after). */
+    border-bottom-left-radius: 4px;
+    pointer-events: none;
+  }
+  .comment-tree-item:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    left: var(--comment-tree-trunk-x);
+    /* Overlap elbow by 2px so the trunk meets the corner (no hairline gap). */
+    top: calc(var(--comment-tree-elbow-y) - 2px);
+    bottom: calc(-1 * var(--comment-tree-gap, 16px));
+    border-left: 2px solid var(--color-border);
+    pointer-events: none;
+  }
+  .comment-tree-avatar-anchor {
+    position: relative;
+  }
+  /*
+   * Draws a vertical trunk from the bottom of the avatar circle to the bottom
+   * of the avatar wrapper div (which flexbox stretches to the full row height).
+   * The <ul>::before then picks up from there and extends upward to close any
+   * remaining gap between the row bottom and the <ul> top.
+   */
+  .comment-tree-avatar-parent::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    border-left: 2px solid var(--color-border);
+    pointer-events: none;
+  }
+  /* sm avatar = 28px tall; left: 13px centers the 2px border on x=14 */
+  .comment-tree-avatar-parent-sm::after {
+    top: 28px;
+    left: 13px;
+  }
+  /* md avatar = 36px tall; left: 17px centers the 2px border on x=18 */
+  .comment-tree-avatar-parent-md::after {
+    top: 36px;
+    left: 17px;
+  }
+
+  /*
+   * Root-level reply list. The root row uses an md avatar (36px, center at
+   * 18px from the row's left edge). The <ul> sits directly under the root
+   * row (flex gap-2 = 8px between them, plus mt-3 = 12px on the <ul> →
+   * 20px total), and the "Show replies" toggle button (ml-12 sibling) sits
+   * in that gap. The trunk rises 18 + 12 = 30px above the <ul> to reach
+   * the root avatar's center; we use a slightly larger trunk-x (18px) and
+   * elbow (24px wide → avatar at x=42) to match the larger md avatar.
+   */
+  .comment-tree-children.comment-tree-root {
+    --comment-tree-trunk-x: 17px;
+    --comment-tree-avatar-x: 42px;
+    /*
+     * Trunk rises from the <ul> top up to meet the avatar wrapper's ::after.
+     * The avatar wrapper bottom = flex-row bottom. Gap from there to <ul> top:
+     *   gap-2 (8px) + button (~18px) + gap-2 (8px) + mt-3 (12px) = ~46px.
+     * Use 50px so the two segments overlap slightly for a seamless join.
+     */
+    --comment-tree-trunk-extend-top: 50px;
+  }
+  /*
+   * Nested reply list. Nested parents render a compact (sm = 28px) avatar,
+   * centered at x=14 from the parent row's left edge. The <ul> starts at
+   * that same left edge and is separated by mt-2 (8px), so the trunk
+   * rises 8px + 8px gap = 16px to meet the bottom of the parent comment.
+   */
+  .comment-tree-children.comment-tree-nested {
+    --comment-tree-trunk-x: 13px;
+    --comment-tree-avatar-x: 38px;
+    /*
+     * Trunk rises from the <ul> top up past:
+     *   8px mt-2 on the <ul> + 8px flex gap = 16px.
+     */
+    --comment-tree-trunk-extend-top: 16px;
+  }
+}
+
 /* Content rating pills — flat solid fills; identical in light and dark. */
 :root,
 .theme-light,

@@ -1,5 +1,7 @@
 type VideoPlayerProps = {
   src: string;
+  /** When set, the player loads `/api/videos/{id}/renditions` and shows a quality menu. */
+  videoId?: string;
   title?: string;
   className?: string;
   /**
@@ -18,8 +20,13 @@ type VideoPlayerProps = {
  * most faithful way to use it inside Next.js without rewriting it as a
  * React component.
  */
+function isLocalHostUploadSource(src: string) {
+  return src.startsWith("/uploads/videos/");
+}
+
 export function VideoPlayer({
   src,
+  videoId,
   title,
   className,
   liveStartedAt,
@@ -30,10 +37,16 @@ export function VideoPlayer({
       : typeof liveStartedAt === "string" && liveStartedAt
         ? liveStartedAt
         : null;
+  const vidQ =
+    videoId != null && isLocalHostUploadSource(src)
+      ? `&vid=${encodeURIComponent(videoId)}`
+      : "";
   const base =
     startedAtIso != null
-      ? `/video-player/embed.html?src=${encodeURIComponent(src)}&startedAt=${encodeURIComponent(startedAtIso)}`
-      : `/video-player/embed.html?src=${encodeURIComponent(src)}`;
+      ? `/video-player/embed.html?src=${encodeURIComponent(src)}&startedAt=${encodeURIComponent(
+          startedAtIso,
+        )}${vidQ}`
+      : `/video-player/embed.html?src=${encodeURIComponent(src)}${vidQ}`;
   const iframeSrc = `${base}&autoplay=1`;
   return (
     <div

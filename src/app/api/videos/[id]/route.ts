@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ContentRating, isContentRating } from "@/lib/ratings";
 import { VideoCategory, isVideoCategory } from "@/lib/categories";
+import { collectVariantPublicUrls } from "@/lib/videoQualities";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -227,6 +228,12 @@ export async function DELETE(
   }
   const { video } = result;
 
+  for (const u of collectVariantPublicUrls(
+    video.qualityVariantsJson,
+    video.sourceUrl,
+  )) {
+    await safeUnlinkPublicUrl(u);
+  }
   await prisma.video.delete({ where: { id: video.id } });
   await safeUnlinkPublicUrl(video.sourceUrl);
   await safeUnlinkPublicUrl(video.thumbnail);

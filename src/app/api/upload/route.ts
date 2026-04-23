@@ -23,6 +23,11 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 import { ensureChannelForUser } from "@/lib/slug";
+import {
+  buildQualityLadderFiles,
+  type VideoQualityRendition,
+  unlinkRungFilesForVideoId,
+} from "@/lib/videoQualities";
 
 import {
 
@@ -580,30 +585,46 @@ export async function POST(req: Request) {
 
     : null;
 
+  const inputAbs = path.join(VIDEO_DIR, parsed.videoFileName);
 
+  let ladder: VideoQualityRendition[];
+
+  try {
+    ladder = await buildQualityLadderFiles(
+      videoId,
+      inputAbs,
+      publicVideoUrl,
+      VIDEO_DIR,
+    );
+  } catch (err) {
+    console.error("Transcode / probe failed:", err);
+    await unlink(inputAbs).catch(() => {});
+    if (parsed.thumbFileName) {
+      await unlink(path.join(THUMB_DIR, parsed.thumbFileName)).catch(() => {});
+    }
+    await unlinkRungFilesForVideoId(videoId, VIDEO_DIR);
+    return NextResponse.json(
+      {
+        error:
+          "Video processing failed. Install ffmpeg and ffprobe, and use a valid video file.",
+      },
+      { status: 500 },
+    );
+  }
 
   const video = await prisma.video.create({
-
     data: {
-
+      id: videoId,
       title: parsed.title.slice(0, 200),
-
       description: parsed.description?.slice(0, 5000),
-
       category: parsed.category,
-
       rating: parsed.rating,
-
       sourceUrl: publicVideoUrl,
-
       thumbnail: publicThumbUrl,
-
       channelId: channel.id,
-
       durationSec: parsed.durationSec,
-
+      qualityVariantsJson: JSON.stringify(ladder),
     },
-
   });
 
 
