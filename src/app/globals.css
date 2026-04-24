@@ -117,6 +117,7 @@
     --comment-tree-trunk-x: 13px;
     --comment-tree-avatar-x: 38px;
     --comment-tree-elbow-y: 14px;
+    --comment-tree-elbow-radius: 10px;
     --comment-tree-trunk-extend-top: 0px;
     --comment-tree-gap: 16px;
     position: relative;
@@ -143,16 +144,15 @@
     height: var(--comment-tree-elbow-y);
     border-left: 2px solid var(--color-border);
     border-bottom: 2px solid var(--color-border);
-    /* Small radius keeps a long straight trunk before the bend (avoids a gap to ::after). */
-    border-bottom-left-radius: 4px;
+    border-bottom-left-radius: var(--comment-tree-elbow-radius);
     pointer-events: none;
   }
   .comment-tree-item:not(:last-child)::after {
     content: "";
     position: absolute;
     left: var(--comment-tree-trunk-x);
-    /* Overlap elbow by 2px so the trunk meets the corner (no hairline gap). */
-    top: calc(var(--comment-tree-elbow-y) - 2px);
+    /* Start before the curve so the straight trunk overlaps the straight portion of the elbow. */
+    top: max(0px, calc(var(--comment-tree-elbow-y) - var(--comment-tree-elbow-radius) - 2px));
     bottom: calc(-1 * var(--comment-tree-gap, 16px));
     border-left: 2px solid var(--color-border);
     pointer-events: none;

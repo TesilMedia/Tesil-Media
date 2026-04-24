@@ -29,6 +29,8 @@ model User {
   sessions       Session[]
   accounts       Account[]
   comments       Comment[]
+  videoLikes     VideoLike[]
+  commentLikes   CommentLike[]
 }
 
 model Account {
@@ -99,6 +101,8 @@ model Video {
   thumbnail   String?
   durationSec Int?
   views       Int      @default(0)
+  likes       Int      @default(0)
+  dislikes    Int      @default(0)
   // Canonical category slug. See `src/lib/categories.ts` for the full list
   // ("gaming", "music", "tech", ...). Legacy rows may still hold free-form
   // values; those are coerced via `normaliseCategory` on read.
@@ -110,12 +114,28 @@ model Video {
   channelId String
   channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
-  comments  Comment[]
+  comments    Comment[]
+  videoLikes  VideoLike[]
 
   @@index([channelId])
   @@index([createdAt])
   @@index([rating])
   @@index([category])
+}
+
+model VideoLike {
+  id      String @id @default(cuid())
+  // 1 = like, -1 = dislike
+  value   Int
+
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  videoId String
+  video   Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId])
+  @@index([videoId])
 }
 
 model Comment {
@@ -125,6 +145,8 @@ model Comment {
   // Set the first time a comment is edited (and on every edit thereafter).
   // Null means never edited — used by the UI to show "(edited)".
   editedAt  DateTime?
+  likes     Int       @default(0)
+  dislikes  Int       @default(0)
 
   videoId String
   video   Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
@@ -137,11 +159,28 @@ model Comment {
   // collapses reply-to-reply into reply-to-root). Cascade so deleting a root
   // tears down its replies.
   parentId String?
-  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies  Comment[] @relation("CommentReplies")
+  parent   Comment?     @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[]    @relation("CommentReplies")
+
+  commentLikes CommentLike[]
 
   @@index([videoId, createdAt])
   @@index([parentId])
+}
+
+model CommentLike {
+  id      String @id @default(cuid())
+  // 1 = like, -1 = dislike
+  value   Int
+
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  commentId String
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
+  @@index([commentId])
 }
 
 model LiveStream {

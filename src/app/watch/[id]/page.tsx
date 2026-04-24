@@ -6,6 +6,7 @@ import { VideoPlayer } from "@/components/VideoPlayer";
 import { VideoCard } from "@/components/VideoCard";
 import { RatingBadge } from "@/components/RatingBadge";
 import { Comments, type CommentDTO } from "@/components/Comments";
+import { VideoLikeBar } from "@/components/LikeDislike";
 import { formatViews } from "@/lib/format";
 import { RATING_META, isContentRating } from "@/lib/ratings";
 import { normaliseCategory } from "@/lib/categories";
@@ -103,7 +104,9 @@ export default async function WatchPage({
 
   const ratingWhere = ratingFilterWhere(hidden);
   const relatedCategory = normaliseCategory(video.category);
-  const [related, commentRows] = await Promise.all([
+  const viewerId = session?.user?.id ?? null;
+
+  const [related, commentRows, videoLike, viewerCommentLikes] = await Promise.all([
     prisma.video.findMany({
       where: {
         AND: [
@@ -136,7 +139,24 @@ export default async function WatchPage({
         },
       },
     }),
+    viewerId
+      ? prisma.videoLike.findUnique({
+          where: { userId_videoId: { userId: viewerId, videoId: video.id } },
+        })
+      : null,
+    viewerId
+      ? prisma.commentLike.findMany({
+          where: { userId: viewerId, comment: { videoId: video.id } },
+          select: { commentId: true, value: true },
+        })
+      : [],
   ]);
+
+  const commentVoteMap = new Map<string, number>(
+    (viewerCommentLikes as { commentId: string; value: number }[]).map(
+      (cl) => [cl.commentId, cl.value],
+    ),
+  );
 
   const initialComments: CommentDTO[] = commentRows.map((c) => ({
     id: c.id,
@@ -145,6 +165,9 @@ export default async function WatchPage({
     editedAt: c.editedAt ? c.editedAt.toISOString() : null,
     userId: c.userId,
     parentId: c.parentId,
+    likes: c.likes,
+    dislikes: c.dislikes,
+    userVote: (commentVoteMap.get(c.id) ?? 0) as 0 | 1 | -1,
     user: {
       id: c.user.id,
       name: c.user.channel?.name ?? c.user.name,
@@ -197,7 +220,7 @@ export default async function WatchPage({
             </div>
           </div>
 
-          <div className="mt-3 flex items-center justify-between gap-4 border-b border-border pb-3">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
             <Link
               href={`/c/${video.channel.slug}`}
               className="flex items-center gap-3"
@@ -219,8 +242,17 @@ export default async function WatchPage({
                 </span>
               </span>
             </Link>
-            <div className="text-sm text-muted">
-              {formatViews(video.views)} views
+            <div className="flex items-center gap-4">
+              <VideoLikeBar
+                videoId={video.id}
+                initialLikes={video.likes}
+                initialDislikes={video.dislikes}
+                initialVote={(videoLike?.value ?? 0) as 0 | 1 | -1}
+                disabled={!viewerId}
+              />
+              <div className="text-sm text-muted">
+                {formatViews(video.views)} views
+              </div>
             </div>
           </div>
 

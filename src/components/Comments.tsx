@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { CommentLikeDislike } from "@/components/LikeDislike";
 
 export type CommentDTO = {
   id: string;
@@ -10,6 +11,9 @@ export type CommentDTO = {
   editedAt: string | null;
   userId: string;
   parentId: string | null;
+  likes: number;
+  dislikes: number;
+  userVote: 0 | 1 | -1;
   user: {
     id: string;
     name: string | null;
@@ -23,6 +27,7 @@ type Viewer = { id: string; name: string | null; image: string | null } | null;
 type Node = { comment: CommentDTO; children: Node[] };
 
 const MAX_BODY = 2000;
+const MAX_TREE_DEPTH = 3;
 
 export function Comments({
   videoId,
@@ -136,7 +141,7 @@ export function Comments({
   }
 
   return (
-    <section className="mt-6 rounded-lg border border-border bg-surface p-4 shadow-card">
+    <section className="mt-6 overflow-x-hidden rounded-lg border border-border bg-surface p-4 shadow-card">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">
         {items.length} {items.length === 1 ? "comment" : "comments"}
       </h2>
@@ -171,6 +176,7 @@ export function Comments({
             <li key={root.comment.id} className="flex flex-col gap-2">
               <CommentNode
                 node={root}
+                depth={0}
                 viewer={viewer}
                 onDelete={remove}
                 onSubmitReply={postComment}
@@ -199,6 +205,7 @@ export function Comments({
                         <li key={child.comment.id} className="comment-tree-item">
                           <CommentNode
                             node={child}
+                            depth={1}
                             viewer={viewer}
                             onDelete={remove}
                             onSubmitReply={postComment}
@@ -229,6 +236,7 @@ export function Comments({
 
 function CommentNode({
   node,
+  depth,
   viewer,
   onDelete,
   onSubmitReply,
@@ -239,8 +247,10 @@ function CommentNode({
   setEditingId,
   renderChildren,
   showTreeConnector = false,
+  replyingTo = null,
 }: {
   node: Node;
+  depth: number;
   viewer: Viewer;
   onDelete: (id: string) => void;
   onSubmitReply: (
@@ -257,13 +267,14 @@ function CommentNode({
   setEditingId: (id: string | null) => void;
   renderChildren: boolean;
   showTreeConnector?: boolean;
+  replyingTo?: string | null;
 }) {
   const c = node.comment;
   const replyOpen = replyOpenFor === c.id;
   const editing = editingId === c.id;
   const displayName = c.user.name ?? "User";
   const isAuthor = viewer?.id === c.userId;
-  const compact = renderChildren;
+  const compact = depth > 0;
   const avatarWrapperClass = [
     "comment-tree-avatar-anchor shrink-0",
     showTreeConnector ? "comment-tree-avatar-parent" : "",
@@ -280,7 +291,10 @@ function CommentNode({
   );
 
   return (
-    <div className="flex flex-col gap-2">
+    <div
+      className="flex flex-col gap-2"
+      data-comment-id={c.id}
+    >
       <div className="flex gap-3">
         <div className={avatarWrapperClass}>
           {c.user.channelSlug ? (
@@ -316,6 +330,21 @@ function CommentNode({
             </span>
           </div>
 
+          {replyingTo ? (
+            <button
+              type="button"
+              className="mt-0.5 text-left text-xs text-muted transition-colors hover:text-accent-blue"
+              onClick={() => {
+                if (!c.parentId) return;
+                document
+                  .querySelector(`[data-comment-id="${c.parentId}"]`)
+                  ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+              }}
+            >
+              ↳ Replying to <span className="font-medium">{replyingTo}</span>
+            </button>
+          ) : null}
+
           {editing && viewer ? (
             <div className="mt-1">
               <CommentForm
@@ -340,6 +369,13 @@ function CommentNode({
 
           {!editing ? (
             <div className="mt-1 flex items-center gap-3 text-xs text-muted">
+              <CommentLikeDislike
+                commentId={c.id}
+                initialLikes={c.likes}
+                initialDislikes={c.dislikes}
+                initialVote={c.userVote}
+                disabled={!viewer}
+              />
               {viewer ? (
                 <button
                   type="button"
@@ -376,7 +412,7 @@ function CommentNode({
       </div>
 
       {replyOpen && viewer && !editing ? (
-        <div className="ml-10">
+        <div className="sm:ml-10">
           <CommentForm
             viewer={viewer}
             placeholder={`Reply to ${displayName}…`}
@@ -392,25 +428,62 @@ function CommentNode({
         </div>
       ) : null}
 
-      {renderChildren && node.children.length > 0 ? (
+      {renderChildren && node.children.length > 0 && depth + 1 <= MAX_TREE_DEPTH ? (
         <ul className="comment-tree-children comment-tree-nested mt-2 flex flex-col gap-4 transition-colors">
-          {node.children.map((child) => (
-            <li key={child.comment.id} className="comment-tree-item">
-              <CommentNode
-                node={child}
-                viewer={viewer}
-                onDelete={onDelete}
-                onSubmitReply={onSubmitReply}
-                onSubmitEdit={onSubmitEdit}
-                replyOpenFor={replyOpenFor}
-                setReplyOpenFor={setReplyOpenFor}
-                editingId={editingId}
-                setEditingId={setEditingId}
-                renderChildren
-                showTreeConnector={child.children.length > 0}
-              />
-            </li>
-          ))}
+          {depth + 1 < MAX_TREE_DEPTH
+            ? node.children.map((child) => (
+                <li key={child.comment.id} className="comment-tree-item">
+                  <CommentNode
+                    node={child}
+                    depth={depth + 1}
+                    viewer={viewer}
+                    onDelete={onDelete}
+                    onSubmitReply={onSubmitReply}
+                    onSubmitEdit={onSubmitEdit}
+                    replyOpenFor={replyOpenFor}
+                    setReplyOpenFor={setReplyOpenFor}
+                    editingId={editingId}
+                    setEditingId={setEditingId}
+                    renderChildren
+                    showTreeConnector={child.children.length > 0}
+                  />
+                </li>
+              ))
+            : node.children.flatMap((child) => [
+                <li key={child.comment.id} className="comment-tree-item">
+                  <CommentNode
+                    node={child}
+                    depth={depth + 1}
+                    viewer={viewer}
+                    onDelete={onDelete}
+                    onSubmitReply={onSubmitReply}
+                    onSubmitEdit={onSubmitEdit}
+                    replyOpenFor={replyOpenFor}
+                    setReplyOpenFor={setReplyOpenFor}
+                    editingId={editingId}
+                    setEditingId={setEditingId}
+                    renderChildren={false}
+                  />
+                </li>,
+                ...flattenDescendants(child).map(({ node: desc, parent }) => (
+                  <li key={desc.comment.id} className="comment-tree-item">
+                    <CommentNode
+                      node={desc}
+                      depth={depth + 1}
+                      viewer={viewer}
+                      onDelete={onDelete}
+                      onSubmitReply={onSubmitReply}
+                      onSubmitEdit={onSubmitEdit}
+                      replyOpenFor={replyOpenFor}
+                      setReplyOpenFor={setReplyOpenFor}
+                      editingId={editingId}
+                      setEditingId={setEditingId}
+                      renderChildren={false}
+                      replyingTo={parent.comment.user.name ?? "User"}
+                    />
+                  </li>
+                )),
+              ])}
         </ul>
       ) : null}
     </div>
@@ -463,11 +536,7 @@ function CommentForm({
           className="w-full resize-y rounded-md border border-border bg-bg p-2 text-sm outline-none focus:border-accent"
           disabled={submitting}
         />
-        <div className="mt-2 flex items-center justify-between gap-3">
-          <span className="text-xs text-muted">
-            {trimmed.length}/{MAX_BODY}
-          </span>
-          <div className="flex gap-2">
+        <div className="mt-2 flex justify-end gap-2">
             {onCancel || body.length > 0 ? (
               <button
                 type="button"
@@ -475,7 +544,7 @@ function CommentForm({
                   setBody("");
                   onCancel?.();
                 }}
-                className="rounded-full border border-border bg-surface px-4 py-1.5 text-sm hover:bg-surface-2"
+                className="rounded-full border border-border bg-surface px-3 py-1 text-sm hover:bg-surface-2 sm:px-4 sm:py-1.5"
                 disabled={submitting}
               >
                 Cancel
@@ -484,11 +553,10 @@ function CommentForm({
             <button
               type="submit"
               disabled={!canSubmit}
-              className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-full bg-accent px-3 py-1 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:py-1.5"
             >
               {submitting ? "Posting…" : submitLabel}
             </button>
-          </div>
         </div>
       </div>
     </form>
@@ -555,6 +623,20 @@ function buildTree(items: CommentDTO[]): {
   };
   for (const r of roots) count(r);
   return { roots, descendantCount };
+}
+
+function flattenDescendants(
+  node: Node,
+): Array<{ node: Node; parent: Node }> {
+  const out: Array<{ node: Node; parent: Node }> = [];
+  const dfs = (n: Node) => {
+    for (const child of n.children) {
+      out.push({ node: child, parent: n });
+      dfs(child);
+    }
+  };
+  dfs(node);
+  return out;
 }
 
 function findRootId(items: CommentDTO[], startId: string): string | null {
