@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
         source: "/hls/:path*",
         destination: "http://localhost:8000/live/:path*",
       },
+      {
+        source: "/hls-vod/:path*",
+        destination: "http://localhost:8000/vod/:path*",
+      },
     ];
   },
   experimental: {
