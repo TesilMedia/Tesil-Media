@@ -262,6 +262,90 @@ function cleanupHlsDir(slug) {
   }
 }
 
+/** Wait for a child process to exit, then resolve. Sends SIGKILL after `timeoutMs`. */
+function waitForExit(child, timeoutMs) {
+  return new Promise((resolve) => {
+    if (child.exitCode !== null || child.killed) { resolve(); return; }
+    const timer = setTimeout(() => {
+      try { child.kill("SIGKILL"); } catch { /* noop */ }
+      resolve();
+    }, timeoutMs);
+    child.once("exit", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+/**
+ * Append EXT-X-ENDLIST to the manifest if absent.
+ * ffmpeg writes it on clean SIGINT exit; we add it manually if SIGKILL was used.
+ */
+function ensureEndlist(manifestPath) {
+  try {
+    const content = readFileSync(manifestPath, "utf8");
+    if (!content.includes("#EXT-X-ENDLIST")) {
+      appendFileSync(manifestPath, "\n#EXT-X-ENDLIST\n", "utf8");
+    }
+  } catch (err) {
+    console.warn("[remux] could not check/append EXT-X-ENDLIST:", err);
+  }
+}
+
+/** Extract ordered segment filenames from an HLS manifest. Returns absolute paths. */
+function parseHlsSegments(manifestPath, segDir) {
+  try {
+    const content = readFileSync(manifestPath, "utf8");
+    return content
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith("#"))
+      .map((seg) => (path.isAbsolute(seg) ? seg : path.join(segDir, seg)));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Concat-remux an ordered list of .ts segments to a single faststart MP4.
+ * IO-bound (no re-encoding) — typically completes in seconds regardless of duration.
+ */
+function remuxVodToMp4(segments, outputPath) {
+  const listPath = `${outputPath}.concat.txt`;
+  // Forward slashes are safe on Windows ffmpeg and required on Unix.
+  const listContent = segments
+    .map((s) => `file '${s.replace(/\\/g, "/").replace(/'/g, "'\\''")}'`)
+    .join("\n");
+  writeFileSync(listPath, listContent, "utf8");
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "ffmpeg",
+      [
+        "-hide_banner",
+        "-loglevel", "warning",
+        "-f", "concat",
+        "-safe", "0",
+        "-i", listPath,
+        "-c", "copy",
+        "-movflags", "+faststart",
+        "-y",
+        outputPath,
+      ],
+      { stdio: ["ignore", "inherit", "inherit"], windowsHide: true },
+    );
+    child.on("exit", (code) => {
+      try { rmSync(listPath, { force: true }); } catch { /* noop */ }
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg concat exited with code ${code}`));
+    });
+    child.on("error", (err) => {
+      try { rmSync(listPath, { force: true }); } catch { /* noop */ }
+      reject(err);
+    });
+  });
+}
+
 async function main() {
   ensureFfmpegOnPath();
   if (!STREAM_HOOK_SECRET) {
@@ -325,19 +409,48 @@ async function main() {
   nms.on("donePublish", (session) => {
     const { streamName, key } = publishAuthFromSession(session);
     if (!streamName) return;
+
+    const vod = vodState.get(streamName);
+    vodState.delete(streamName);
     authorizedStreams.delete(streamName);
+
+    const child = transcoders.get(streamName);
     stopHlsTranscoder(streamName);
     cleanupHlsDir(streamName);
-    // Always notify the app the stream ended — STREAM_HOOK_SECRET already
-    // authenticates this call, so the key is only sent as a best-effort hint
-    // (it may be empty if the media server was restarted mid-stream).
-    void postHookPayloadAsync({
-      event: "donePublish",
-      streamName,
-      key,
-    }).catch((err) => {
-      console.error("[nms] donePublish hook failed:", err);
-    });
+
+    // Notify the app immediately so isLive flips without waiting for the remux.
+    // STREAM_HOOK_SECRET already authenticates this call; key is best-effort.
+    void postHookPayloadAsync({ event: "donePublish", streamName, key }).catch(
+      (err) => console.error("[nms] donePublish hook failed:", err),
+    );
+
+    if (!vod) return;
+
+    void (async () => {
+      // Wait for ffmpeg to flush its final segment before reading the manifest.
+      if (child) await waitForExit(child, 5000);
+
+      const manifestPath = path.join(vod.vodHlsDir, "index.m3u8");
+      ensureEndlist(manifestPath);
+      const segments = parseHlsSegments(manifestPath, vod.vodHlsDir);
+
+      if (segments.length === 0) {
+        console.warn(`[remux] no segments for ${streamName} — skipping VOD`);
+        rmSync(vod.vodHlsDir, { recursive: true, force: true });
+        return;
+      }
+
+      const mp4Path = path.join(VIDEO_UPLOAD_DIR, `${vod.vodId}.mp4`);
+      try {
+        await remuxVodToMp4(segments, mp4Path);
+        await postHookPayloadAsync({ event: "vodReady", streamName, vodId: vod.vodId });
+        console.log(`[remux] VOD ready for ${streamName}: ${mp4Path}`);
+      } catch (err) {
+        console.error(`[remux] failed for ${streamName}:`, err);
+      } finally {
+        rmSync(vod.vodHlsDir, { recursive: true, force: true });
+      }
+    })();
   });
 
   const shutdown = () => {
