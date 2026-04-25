@@ -30,10 +30,11 @@ A new `vodState = new Map<slug, { vodId: string, vodHlsDir: string }>()` is adde
 
 When `donePublish` fires:
 
-1. Send SIGINT to ffmpeg; await process exit (up to 5s, then SIGKILL)
-2. Ensure `EXT-X-ENDLIST` is appended to `media/vod/{slug}/index.m3u8` (ffmpeg writes it on clean exit; append manually if SIGKILL was needed)
-3. Fire existing `donePublish` hook immediately (`isLive = false`)
-4. Async remux (non-blocking):
+1. Send SIGINT to ffmpeg
+2. Fire existing `donePublish` hook immediately (`isLive = false`) — no waiting
+3. Await ffmpeg process exit (up to 5s, then SIGKILL)
+4. Ensure `EXT-X-ENDLIST` is appended to `media/vod/{slug}/index.m3u8` (ffmpeg writes it on clean exit; append manually if SIGKILL was needed)
+5. Async remux (non-blocking):
    a. Parse `index.m3u8` for ordered segment list
    b. Write `concat.txt`
    c. Run `ffmpeg -f concat -safe 0 -i concat.txt -c copy -movflags +faststart -y public/uploads/videos/{vodId}.mp4`
