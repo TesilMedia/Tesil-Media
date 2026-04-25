@@ -115,6 +115,16 @@
   const startupHostBridge = ["1", "true", "yes"].includes(
     String(startupQuery.get("hostBridge") || "").toLowerCase()
   );
+  const startupDisableSeek = startupQuery.get("disableSeek") === "1";
+  const startupDvrMode = startupQuery.get("dvrMode") === "1";
+
+  if (startupDisableSeek) {
+    if (progressWrap instanceof HTMLElement) progressWrap.hidden = true;
+    if (progress instanceof HTMLInputElement) {
+      progress.disabled = true;
+      progress.tabIndex = -1;
+    }
+  }
 
   /**
    * When false (typical phones / touch-first tablets), we do not mute+retry on
@@ -202,6 +212,45 @@
       /* seekable can throw before metadata arrives */
     }
     return null;
+  }
+
+  /** Earliest seekable position (seekable.start(0)). Non-zero for long-running live streams. */
+  function getSeekableStartTime() {
+    try {
+      const seekable = video.seekable;
+      if (seekable && seekable.length > 0) {
+        const start = seekable.start(0);
+        if (Number.isFinite(start) && start >= 0) return start;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /**
+   * Finite duration for progress/scrub calculations. For live streams
+   * `video.duration` is Infinity; fall back to the seekable end so the scrub
+   * bar, frame-step, and preview all work within the available buffer window.
+   */
+  function getEffectiveDuration() {
+    const dur = video.duration;
+    if (Number.isFinite(dur) && dur > 0) return dur;
+    if (isLiveStream()) {
+      const end = getSeekableEndTime();
+      if (end != null) return end;
+    }
+    return null;
+  }
+
+  /**
+   * Broadcast elapsed ms at a given video.currentTime position.
+   * Uses wall-clock (Date.now - startedAt) offset by the viewer's distance
+   * from the live edge, so the counter is accurate even when scrubbed back.
+   */
+  function getElapsedMsAtVideoTime(t) {
+    if (startupStartedAtMs == null) return null;
+    const seekableEnd = getSeekableEndTime();
+    const offset = seekableEnd != null ? (t - seekableEnd) * 1000 : 0;
+    return Math.max(0, Date.now() - startupStartedAtMs + offset);
   }
 
   /** hls.js suggested sync point (often a few seconds behind the true buffer edge). */
@@ -337,6 +386,9 @@
 
   function tryPlayLiveMedia() {
     if (!isLiveStream()) return;
+    // After the first play, respect an explicit user pause rather than force-resuming
+    // every time a new segment arrives (BUFFER_APPENDED fires every ~2s).
+    if (liveHasEverPlayed && video.paused) return;
     attemptPlayWithAutoplayMuteFallback({ live: true });
   }
 
@@ -385,6 +437,9 @@
    * events after MANIFEST_PARSED, so retry on later events instead of seeking just once.
    */
   let pendingInitialLiveSeek = false;
+  /** Set to true once the live video has played for the first time. Prevents `tryPlayLiveMedia`
+   *  from force-resuming a video the user explicitly paused (e.g. to frame-step or scrub). */
+  let liveHasEverPlayed = false;
   /** Clears a stuck `pendingInitialLiveSeek` if `seekable` never appears (rare). */
   let initialLiveSeekGuardTimer = null;
   /** Polls `tryConsumeInitialLiveSeek` at a fixed cadence for cross-browser parity. */
@@ -417,6 +472,10 @@
    * first-load/reload behavior consistent across browsers and hosts.
    */
   function requestInitialLiveSeek() {
+    if (startupDvrMode) {
+      tryPlayLiveMedia();
+      return;
+    }
     pendingInitialLiveSeek = true;
     clearInitialLiveSeekGuard();
     initialLiveSeekPollTimer = window.setInterval(() => {
@@ -451,8 +510,8 @@
   function syncLiveButtonUI() {
     if (!(goLiveBtn instanceof HTMLElement)) return;
     const live = isLiveStream();
-    goLiveBtn.hidden = !live;
-    if (!live) return;
+    goLiveBtn.hidden = !live || startupDvrMode;
+    if (!live || startupDvrMode) return;
     const edge = getLiveEdgeTime();
     const atLive =
       edge == null || edge - video.currentTime <= LIVE_EDGE_AT_TOLERANCE_SEC;
@@ -1061,8 +1120,8 @@
   function stepByFrame(direction) {
     if (isExternalEmbedSource()) return;
     if (!video.paused) video.pause();
-    const dur = video.duration;
-    if (!Number.isFinite(dur) || dur <= 0) return;
+    const dur = getEffectiveDuration();
+    if (dur == null) return;
 
     const fd = getFramePeriodSec() ?? FALLBACK_FRAME_PERIOD;
     const eps = fd * 0.02;
@@ -1608,14 +1667,16 @@
         // ~3-segment cushion. `maxLiveSyncPlaybackRate` nudges playback speed
         // when we fall behind without a hard seek.
         liveSyncDurationCount: 1,
-        liveMaxLatencyDurationCount: 10,
+        liveMaxLatencyDurationCount: 7,
         maxLiveSyncPlaybackRate: 1.2,
         maxBufferLength: 24,
         backBufferLength: 18,
+        ...(startupDvrMode ? { startPosition: 0 } : {}),
         manifestLoadPolicy: retryPolicy,
         playlistLoadPolicy: retryPolicy,
         fragLoadPolicy: retryPolicy,
       });
+      liveHasEverPlayed = false;
       hlsInstance = instance;
       requestInitialLiveSeek();
       instance.on(HlsCtor.Events.MANIFEST_PARSED, () => {
@@ -2129,8 +2190,7 @@
       if (scrubPreviewActive) hideScrubPreview();
       return;
     }
-    const dur = video.duration;
-    const durOk = Number.isFinite(dur) && dur > 0;
+    const durOk = getEffectiveDuration() != null;
     const scrubbing = player.dataset.scrubbing === "true";
     if (!durOk) {
       if (scrubPreviewActive && !scrubbing) hideScrubPreview();
@@ -2222,9 +2282,10 @@
     const rect = progressWrap.getBoundingClientRect();
     if (rect.width <= 0) return null;
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    const dur = video.duration;
-    if (!Number.isFinite(dur) || dur <= 0) return null;
-    return ratio * dur;
+    const end = getEffectiveDuration();
+    if (end == null) return null;
+    const start = isLiveStream() ? (getSeekableStartTime() ?? 0) : 0;
+    return start + ratio * (end - start);
   }
 
   /**
@@ -2326,14 +2387,17 @@
     const t = timeAtProgressClientX(clientX);
     if (t == null) return;
     lastScrubTime = t;
-    if (previewTimeEl instanceof HTMLElement) previewTimeEl.textContent = formatTime(t);
+    if (previewTimeEl instanceof HTMLElement) {
+      const elapsedMs = isLiveStream() ? getElapsedMsAtVideoTime(t) : null;
+      previewTimeEl.textContent = elapsedMs != null ? formatTime(elapsedMs / 1000) : formatTime(t);
+    }
     positionScrubPreview(clientX);
     schedulePreviewSeek(t);
     /* Touch scrub uses document `touchmove` + preventDefault so the native range does not emit
        `input`; keep the thumb and main video in sync with the pointer. */
     if (player.dataset.scrubbing === "true") {
-      const dur = video.duration;
-      if (Number.isFinite(dur) && dur > 0) {
+      const dur = getEffectiveDuration();
+      if (dur != null) {
         const ratio = Math.min(1, Math.max(0, t / dur));
         progress.value = String(Math.round(ratio * 1000));
         syncProgressRailFill();
@@ -2344,12 +2408,16 @@
   }
 
   function updateScrubPreviewFromRatio(ratio) {
-    const dur = video.duration;
-    if (!Number.isFinite(dur) || dur <= 0) return;
+    const end = getEffectiveDuration();
+    if (end == null) return;
     const clamped = Math.min(1, Math.max(0, ratio));
-    const t = clamped * dur;
+    const start = isLiveStream() ? (getSeekableStartTime() ?? 0) : 0;
+    const t = start + clamped * (end - start);
     lastScrubTime = t;
-    if (previewTimeEl instanceof HTMLElement) previewTimeEl.textContent = formatTime(t);
+    if (previewTimeEl instanceof HTMLElement) {
+      const elapsedMs = isLiveStream() ? getElapsedMsAtVideoTime(t) : null;
+      previewTimeEl.textContent = elapsedMs != null ? formatTime(elapsedMs / 1000) : formatTime(t);
+    }
     const rect = progressWrap.getBoundingClientRect();
     lastPreviewClientX = rect.left + clamped * rect.width;
     layoutScrubPreviewAtRatio(clamped);
@@ -2398,12 +2466,15 @@
     const dur = video.duration;
     const live = isLiveStream() || dur === Infinity;
     if (live) {
-      // Prefer "elapsed-since-broadcast-start / live-duration", both computed
-      // from PROGRAM-DATE-TIME against the host-supplied `startedAt`. This is
-      // the only reading that agrees across browsers and across reloads: the
-      // raw `currentTime` value starts wherever MSE/native-HLS decided the
-      // first attached segment should map to (0 in Chrome via hls.js, the
-      // segment's wall-clock in Safari/Firefox), which was the drift you saw.
+      // When the host supplies `startedAt`, use Date.now() - startedAt so the
+      // counter always reflects real wall-clock broadcast runtime regardless of
+      // how far behind the live edge the viewer is buffering.
+      if (startupStartedAtMs != null) {
+        const elapsedMs = getElapsedMsAtVideoTime(video.currentTime);
+        timeDisplay.textContent = formatTime(elapsedMs / 1000);
+        return;
+      }
+      // Fallback: PDT-based elapsed / live-edge duration (no startedAt supplied).
       const elapsedMs = getLiveElapsedMs();
       const durMs = getLiveDurationMs();
       if (elapsedMs != null && durMs != null) {
@@ -2456,14 +2527,16 @@
   }
 
   function syncProgressFromVideo() {
-    const dur = video.duration;
-    if (!dur || !Number.isFinite(dur)) {
+    const end = getEffectiveDuration();
+    if (end == null) {
       progress.value = 0;
       syncProgressRailFill();
       return;
     }
-    const ratio = video.currentTime / dur;
-    progress.value = String(Math.round(ratio * 1000));
+    const start = isLiveStream() ? (getSeekableStartTime() ?? 0) : 0;
+    const span = end - start;
+    const ratio = span > 0 ? (video.currentTime - start) / span : 0;
+    progress.value = String(Math.round(Math.max(0, Math.min(1, ratio)) * 1000));
     syncProgressRailFill();
   }
 
@@ -2869,6 +2942,7 @@
   });
 
   video.addEventListener("playing", () => {
+    if (isLiveStream()) liveHasEverPlayed = true;
     tryConsumeInitialLiveSeek();
     syncLiveButtonUI();
     startLiveClock();
@@ -3314,10 +3388,11 @@
   });
 
   progress.addEventListener("input", () => {
-    const dur = video.duration;
-    if (!dur || !Number.isFinite(dur)) return;
+    const end = getEffectiveDuration();
+    if (end == null) return;
     video.pause();
-    const t = (Number(progress.value) / 1000) * dur;
+    const start = isLiveStream() ? (getSeekableStartTime() ?? 0) : 0;
+    const t = start + (Number(progress.value) / 1000) * (end - start);
     video.currentTime = t;
     updateTimeDisplay();
     syncProgressRailFill();
