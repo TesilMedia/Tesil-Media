@@ -161,9 +161,13 @@ function startHlsTranscoder(slug) {
   const hlsDir = path.join(HLS_ROOT, slug);
   mkdirSync(hlsDir, { recursive: true });
 
+  const vodId = randomBytes(12).toString("hex");
+  const vodHlsDir = path.join(VOD_ROOT, slug);
+  mkdirSync(vodHlsDir, { recursive: true });
+
+  vodState.set(slug, { vodId, vodHlsDir });
+
   const rtmpSubscribeUrl = `rtmp://127.0.0.1:${RTMP_PORT}/${APP_NAME}/${slug}`;
-  const manifestPath = path.join(hlsDir, "index.m3u8");
-  const segmentPath = path.join(hlsDir, "seg_%05d.ts");
 
   const args = [
     "-hide_banner",
@@ -173,6 +177,7 @@ function startHlsTranscoder(slug) {
     "-analyzeduration", "0",
     "-rw_timeout", "15000000",
     "-i", rtmpSubscribeUrl,
+    // --- Output 1: Live HLS — sliding 8-segment window, low-latency ---
     "-c:v", "copy",
     "-c:a", "aac",
     "-ar", "44100",
@@ -189,9 +194,21 @@ function startHlsTranscoder(slug) {
     // can show a real wall-clock timestamp aligned with OBS instead of relative
     // seconds into the live window (which drifts per-browser and per-reload).
     "-hls_flags", "delete_segments+append_list+independent_segments+omit_endlist+program_date_time",
-    "-hls_segment_filename", segmentPath,
+    "-hls_segment_filename", path.join(hlsDir, "seg_%05d.ts"),
     "-y",
-    manifestPath,
+    path.join(hlsDir, "index.m3u8"),
+    // --- Output 2: VOD HLS — all segments retained, 4-second cuts ---
+    "-c:v", "copy",
+    "-c:a", "aac",
+    "-ar", "44100",
+    "-b:a", "128k",
+    "-f", "hls",
+    "-hls_time", "4",
+    "-hls_list_size", "0",
+    "-hls_flags", "independent_segments+program_date_time",
+    "-hls_segment_filename", path.join(vodHlsDir, "seg_%05d.ts"),
+    "-y",
+    path.join(vodHlsDir, "index.m3u8"),
   ];
 
   const child = spawn("ffmpeg", args, {
