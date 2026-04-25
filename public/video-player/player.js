@@ -116,7 +116,6 @@
     String(startupQuery.get("hostBridge") || "").toLowerCase()
   );
   const startupDisableSeek = startupQuery.get("disableSeek") === "1";
-  const startupDvrMode = startupQuery.get("dvrMode") === "1";
 
   if (startupDisableSeek) {
     if (progressWrap instanceof HTMLElement) progressWrap.hidden = true;
@@ -124,6 +123,7 @@
       progress.disabled = true;
       progress.tabIndex = -1;
     }
+    if (goLiveBtn instanceof HTMLElement) goLiveBtn.hidden = true;
   }
 
   /**
@@ -472,10 +472,6 @@
    * first-load/reload behavior consistent across browsers and hosts.
    */
   function requestInitialLiveSeek() {
-    if (startupDvrMode) {
-      tryPlayLiveMedia();
-      return;
-    }
     pendingInitialLiveSeek = true;
     clearInitialLiveSeekGuard();
     initialLiveSeekPollTimer = window.setInterval(() => {
@@ -509,9 +505,10 @@
 
   function syncLiveButtonUI() {
     if (!(goLiveBtn instanceof HTMLElement)) return;
+    if (startupDisableSeek) return;
     const live = isLiveStream();
-    goLiveBtn.hidden = !live || startupDvrMode;
-    if (!live || startupDvrMode) return;
+    goLiveBtn.hidden = !live;
+    if (!live) return;
     const edge = getLiveEdgeTime();
     const atLive =
       edge == null || edge - video.currentTime <= LIVE_EDGE_AT_TOLERANCE_SEC;
@@ -1671,7 +1668,6 @@
         maxLiveSyncPlaybackRate: 1.2,
         maxBufferLength: 24,
         backBufferLength: 18,
-        ...(startupDvrMode ? { startPosition: 0 } : {}),
         manifestLoadPolicy: retryPolicy,
         playlistLoadPolicy: retryPolicy,
         fragLoadPolicy: retryPolicy,
@@ -2872,7 +2868,9 @@
       }
       requestInitialLiveSeek();
       seekToLiveEdge();
-      if (video.paused) tryPlayLiveMedia();
+      if (video.paused) {
+        attemptPlayWithAutoplayMuteFallback({ live: true });
+      }
       syncLiveButtonUI();
       updateTimeDisplay();
       bumpChromeActivity();
@@ -3411,6 +3409,17 @@
     if (scrubPointerId != null && e.pointerId !== scrubPointerId) return;
     stopProgressScrubState();
     hideScrubPreview();
+  });
+
+  /* Firefox releases pointer capture on native range inputs without firing pointercancel,
+     leaving scrubbing stuck. End the scrub here as a safety net. */
+  progress.addEventListener("lostpointercapture", (e) => {
+    if (player.dataset.scrubbing !== "true") return;
+    if (scrubPointerId != null && e.pointerId !== scrubPointerId) return;
+    stopProgressScrubState();
+    if (!usesCoarsePrimaryPointer && !isPointOverScrubHitZone(e.clientX, e.clientY)) {
+      hideScrubPreview();
+    }
   });
 
   progress.addEventListener(

@@ -13,8 +13,6 @@ type VideoPlayerProps = {
   liveStartedAt?: Date | string | null;
   /** Hides the seek bar. Used for the true-live player. */
   disableSeek?: boolean;
-  /** Skips snap-to-live-edge and hides the goLive button. Used for the DVR player. */
-  dvrMode?: boolean;
 };
 
 /**
@@ -35,7 +33,6 @@ export function VideoPlayer({
   className,
   liveStartedAt,
   disableSeek,
-  dvrMode,
 }: VideoPlayerProps) {
   const startedAtIso =
     liveStartedAt instanceof Date
@@ -53,12 +50,7 @@ export function VideoPlayer({
           startedAtIso,
         )}${vidQ}`
       : `/video-player/embed.html?src=${encodeURIComponent(src)}${vidQ}`;
-  const extraParams = [
-    disableSeek ? "disableSeek=1" : "",
-    dvrMode ? "dvrMode=1" : "",
-  ]
-    .filter(Boolean)
-    .join("&");
+  const extraParams = [disableSeek ? "disableSeek=1" : ""].filter(Boolean).join("&");
   const iframeSrc = `${base}&autoplay=1${extraParams ? `&${extraParams}` : ""}`;
   return (
     <div

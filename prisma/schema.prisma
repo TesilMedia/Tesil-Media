@@ -114,6 +114,8 @@ model Video {
   channelId String
   channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
+  liveStream  LiveStream? @relation("StreamRecording")
+
   comments    Comment[]
   videoLikes  VideoLike[]
 
@@ -201,8 +203,13 @@ model LiveStream {
   lastIngestAt DateTime?
   updatedAt   DateTime @updatedAt
 
+  // Set by the vodReady hook once the stream recording MP4 is ready.
+  vodVideoId  String?  @unique
+  vodVideo    Video?   @relation("StreamRecording", fields: [vodVideoId], references: [id], onDelete: SetNull)
+
   channelId String  @unique
   channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@index([category])
 }
+

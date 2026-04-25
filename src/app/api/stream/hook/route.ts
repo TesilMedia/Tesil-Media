@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     }
     await prisma.liveStream.update({
       where: { id: stream.id },
-      data: { isLive: true, startedAt: new Date(), lastIngestAt: new Date() },
+      data: { isLive: true, startedAt: new Date(), lastIngestAt: new Date(), vodVideoId: null },
     });
   } else if (parsed.data.event === "donePublish") {
     const stream = await prisma.liveStream.findFirst({
@@ -104,7 +104,7 @@ export async function POST(req: Request) {
       },
     });
     if (!liveStream) return NextResponse.json({ ok: true });
-    await prisma.video.create({
+    const vodVideo = await prisma.video.create({
       data: {
         id: randomUUID(),
         title: liveStream.title,
@@ -114,6 +114,10 @@ export async function POST(req: Request) {
         sourceUrl: `/uploads/videos/${parsed.data.vodId}.mp4`,
         channelId: liveStream.channelId,
       },
+    });
+    await prisma.liveStream.update({
+      where: { channelId: liveStream.channelId },
+      data: { vodVideoId: vodVideo.id },
     });
   }
 

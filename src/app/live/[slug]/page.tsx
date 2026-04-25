@@ -80,6 +80,7 @@ export default async function LivePage({
           isLive={stream.isLive}
           title={stream.title}
           startedAt={stream.startedAt}
+          vodVideoId={stream.vodVideoId ?? null}
         />
       ) : (
         <VideoPlayer
