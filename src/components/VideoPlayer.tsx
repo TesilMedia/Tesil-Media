@@ -11,6 +11,10 @@ type VideoPlayerProps = {
    * last ~12 s of segments so the player can't derive a true start on its own.
    */
   liveStartedAt?: Date | string | null;
+  /** Hides the seek bar. Used for the true-live player. */
+  disableSeek?: boolean;
+  /** Skips snap-to-live-edge and hides the goLive button. Used for the DVR player. */
+  dvrMode?: boolean;
 };
 
 /**
@@ -30,6 +34,8 @@ export function VideoPlayer({
   title,
   className,
   liveStartedAt,
+  disableSeek,
+  dvrMode,
 }: VideoPlayerProps) {
   const startedAtIso =
     liveStartedAt instanceof Date
@@ -47,7 +53,13 @@ export function VideoPlayer({
           startedAtIso,
         )}${vidQ}`
       : `/video-player/embed.html?src=${encodeURIComponent(src)}${vidQ}`;
-  const iframeSrc = `${base}&autoplay=1`;
+  const extraParams = [
+    disableSeek ? "disableSeek=1" : "",
+    dvrMode ? "dvrMode=1" : "",
+  ]
+    .filter(Boolean)
+    .join("&");
+  const iframeSrc = `${base}&autoplay=1${extraParams ? `&${extraParams}` : ""}`;
   return (
     <div
       className={`relative w-full overflow-hidden rounded-lg bg-black shadow-2xl shadow-black/30 ${
