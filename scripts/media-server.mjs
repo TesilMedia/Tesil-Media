@@ -1,5 +1,12 @@
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync, rmSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import {
+  appendFileSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -15,6 +22,8 @@ const STREAM_HOOK_SECRET = process.env.STREAM_HOOK_SECRET ?? "";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MEDIA_ROOT = path.join(REPO_ROOT, "media");
 const HLS_ROOT = path.join(MEDIA_ROOT, APP_NAME);
+const VOD_ROOT = path.join(MEDIA_ROOT, "vod");
+const VIDEO_UPLOAD_DIR = path.join(REPO_ROOT, "public", "uploads", "videos");
 
 /** Active `ffmpeg` subprocesses transcoding RTMP → HLS, keyed by stream slug. */
 const transcoders = new Map();
@@ -25,6 +34,12 @@ const transcoders = new Map();
  * prePublish so that postPublish only spawns ffmpeg for authorized streams.
  */
 const authorizedStreams = new Set();
+
+/**
+ * Tracks VOD HLS output state per active stream slug.
+ * Consumed in `donePublish` to locate segments for remux.
+ */
+const vodState = new Map();
 
 function ensureFfmpegOnPath() {
   try {
@@ -154,6 +169,8 @@ function startHlsTranscoder(slug) {
     "-hide_banner",
     "-loglevel", "warning",
     "-fflags", "nobuffer+genpts",
+    "-probesize", "32",
+    "-analyzeduration", "0",
     "-rw_timeout", "15000000",
     "-i", rtmpSubscribeUrl,
     "-c:v", "copy",
@@ -164,9 +181,9 @@ function startHlsTranscoder(slug) {
     // Shorter segments + a tight first segment cut latency down at the cost of
     // more playlist/segment HTTP traffic. Viewers stay closer to OBS; typical
     // glass-to-glass with plain HLS is still several seconds behind WebRTC.
-    "-hls_time", "1",
+    "-hls_time", "2",
     // Emit the first segment quickly (may still wait for a keyframe from OBS).
-    "-hls_init_time", "0.5",
+    "-hls_init_time", "1",
     "-hls_list_size", "8",
     // `program_date_time` emits EXT-X-PROGRAM-DATE-TIME on every segment so players
     // can show a real wall-clock timestamp aligned with OBS instead of relative
@@ -235,12 +252,14 @@ async function main() {
   }
 
   mkdirSync(HLS_ROOT, { recursive: true });
+  mkdirSync(VOD_ROOT, { recursive: true });
+  mkdirSync(VIDEO_UPLOAD_DIR, { recursive: true });
 
   const nms = new NodeMediaServer({
     rtmp: {
       port: RTMP_PORT,
       chunk_size: 60000,
-      gop_cache: true,
+      gop_cache: false,
       ping: 30,
       ping_timeout: 60,
     },
@@ -250,8 +269,8 @@ async function main() {
     // NMS v4 serves arbitrary static files here — we point `/live` at the HLS
     // directory so `http://<host>:8000/live/<slug>/index.m3u8` resolves directly.
     static: {
-      router: `/${APP_NAME}`,
-      root: HLS_ROOT,
+      router: "/",
+      root: MEDIA_ROOT,
     },
   });
 
@@ -289,10 +308,12 @@ async function main() {
   nms.on("donePublish", (session) => {
     const { streamName, key } = publishAuthFromSession(session);
     if (!streamName) return;
-    const wasAuthorized = authorizedStreams.delete(streamName);
+    authorizedStreams.delete(streamName);
     stopHlsTranscoder(streamName);
-    if (wasAuthorized) cleanupHlsDir(streamName);
-    if (!wasAuthorized || !key) return;
+    cleanupHlsDir(streamName);
+    // Always notify the app the stream ended — STREAM_HOOK_SECRET already
+    // authenticates this call, so the key is only sent as a best-effort hint
+    // (it may be empty if the media server was restarted mid-stream).
     void postHookPayloadAsync({
       event: "donePublish",
       streamName,
