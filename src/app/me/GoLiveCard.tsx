@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 
 type Props = {
   slug: string;
   isLive: boolean;
+  ingestActive: boolean;
   hasStreamKey: boolean;
 };
 
@@ -13,24 +15,60 @@ type KeyResponse = {
   streamKey?: string;
   slug?: string;
   isLive?: boolean;
+  ingestActive?: boolean;
   error?: string;
 };
 
 const SERVER_URL = "rtmp://localhost:1935/live";
 
-export function GoLiveCard({ slug, isLive, hasStreamKey }: Props) {
+type SetupResponse = {
+  ok?: boolean;
+  stream?: {
+    ingestActive?: boolean;
+    isLive?: boolean;
+  };
+};
+
+export function GoLiveCard({ slug, isLive, ingestActive, hasStreamKey }: Props) {
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
   const [loadingKey, setLoadingKey] = useState(false);
   const [rotating, setRotating] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const [error, setError] = useState<string | null>(null);
   const [liveState, setLiveState] = useState(isLive);
+  const [ingestState, setIngestState] = useState(ingestActive);
   const [expanded, setExpanded] = useState(false);
 
   const streamTarget = useMemo(() => {
     const key = revealedKey ?? "••••••••••••••••";
     return `${slug}?key=${key}`;
   }, [revealedKey, slug]);
+
+  useEffect(() => {
+    if (!expanded) return;
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/stream/setup", { cache: "no-store" });
+        const data = (await res.json().catch(() => ({}))) as SetupResponse;
+        if (cancelled || !res.ok || !data.stream) return;
+        setIngestState(Boolean(data.stream.ingestActive));
+        setLiveState(Boolean(data.stream.isLive));
+      } catch {
+        // Ignore transient polling failures.
+      }
+    };
+
+    void poll();
+    const interval = setInterval(() => {
+      void poll();
+    }, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [expanded]);
 
   async function fetchKey() {
     setError(null);
@@ -44,6 +82,7 @@ export function GoLiveCard({ slug, isLive, hasStreamKey }: Props) {
       }
       setRevealedKey(data.streamKey);
       if (typeof data.isLive === "boolean") setLiveState(data.isLive);
+      if (typeof data.ingestActive === "boolean") setIngestState(data.ingestActive);
     } catch (err) {
       console.error(err);
       setError("Network error while loading stream key.");
@@ -64,6 +103,7 @@ export function GoLiveCard({ slug, isLive, hasStreamKey }: Props) {
       }
       setRevealedKey(data.streamKey);
       if (typeof data.isLive === "boolean") setLiveState(data.isLive);
+      if (typeof data.ingestActive === "boolean") setIngestState(data.ingestActive);
     } catch (err) {
       console.error(err);
       setError("Network error while rotating stream key.");
@@ -141,6 +181,10 @@ export function GoLiveCard({ slug, isLive, hasStreamKey }: Props) {
             <span className="inline-flex items-center gap-1 rounded bg-live px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-white">
               <span className="live-pulse inline-block h-1.5 w-1.5 rounded-full bg-white" />
               Live
+            </span>
+          ) : ingestState ? (
+            <span className="rounded bg-accent px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-on-accent">
+              Preview ready
             </span>
           ) : (
             <span className="rounded bg-surface-2 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-muted">
@@ -243,6 +287,28 @@ export function GoLiveCard({ slug, isLive, hasStreamKey }: Props) {
               </div>
             </label>
           </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Link
+              href="/me/live"
+              className="rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-hover"
+            >
+              Open pre-stream setup
+            </Link>
+            <Link
+              href={`/live/${slug}`}
+              className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs hover:bg-surface-2"
+            >
+              Open public page
+            </Link>
+          </div>
+
+          {!liveState && ingestState ? (
+            <p className="mt-2 text-xs text-muted">
+              OBS is publishing, but viewers are still in the waiting room until
+              you press <strong>Go live</strong> in pre-stream setup.
+            </p>
+          ) : null}
 
           <details className="mt-3 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
             <summary className="cursor-pointer text-sm font-medium text-text">

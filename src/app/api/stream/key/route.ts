@@ -44,13 +44,14 @@ export async function GET() {
     const withKey = await prisma.liveStream.update({
       where: { id: stream.id },
       data: { streamKey: newStreamKey() },
-      select: { streamKey: true, isLive: true },
+      select: { streamKey: true, isLive: true, ingestActive: true },
     });
     return NextResponse.json({
       ok: true,
       slug: channel.slug,
       streamKey: withKey.streamKey,
       isLive: withKey.isLive,
+      ingestActive: withKey.ingestActive,
     });
   }
 
@@ -59,6 +60,7 @@ export async function GET() {
     slug: channel.slug,
     streamKey: stream.streamKey,
     isLive: stream.isLive,
+    ingestActive: stream.ingestActive,
   });
 }
 
@@ -81,7 +83,7 @@ export async function POST() {
   const updated = await prisma.liveStream.update({
     where: { id: stream.id },
     data: { streamKey: nextKey },
-    select: { streamKey: true, isLive: true },
+    select: { streamKey: true, isLive: true, ingestActive: true },
   });
 
   return NextResponse.json({
@@ -89,5 +91,6 @@ export async function POST() {
     slug: channel.slug,
     streamKey: updated.streamKey,
     isLive: updated.isLive,
+    ingestActive: updated.ingestActive,
   });
 }

@@ -6,7 +6,7 @@ type Props = {
   slug: string;
   isLive: boolean;
   title: string;
-  startedAt: Date | null;
+  startedAt: Date | string | null;
   vodVideoId: string | null;
 };
 

@@ -72,6 +72,39 @@ export default async function LivePage({
     );
   }
 
+  if (!stream.isLive && stream.ingestActive) {
+    return (
+      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-4 px-4 py-16 text-center lg:px-6">
+        <span className="rounded bg-accent px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-on-accent">
+          Starting soon
+        </span>
+        <h1
+          className={`w-full min-w-0 max-w-full text-2xl font-semibold leading-tight ${titleOverflowClampClass(stream.title)}`}
+        >
+          {stream.title}
+        </h1>
+        <p className="max-w-lg text-sm text-muted">
+          {channel.name} is preparing the stream. Refresh in a moment to join
+          live.
+        </p>
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+          <Link
+            href={`/c/${channel.slug}`}
+            className="rounded-full border border-border bg-surface px-4 py-2 text-sm hover:bg-surface-2"
+          >
+            View channel
+          </Link>
+          <Link
+            href={`/live/${channel.slug}`}
+            className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover"
+          >
+            Refresh
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-6">
       {stream.streamKey ? (

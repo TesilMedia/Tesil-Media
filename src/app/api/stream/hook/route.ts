@@ -32,6 +32,10 @@ const hookSchema = z.discriminatedUnion("event", [
     key: z.string().max(128).optional(),
   }),
   z.object({
+    event: z.literal("streamState"),
+    streamName: streamNameSchema,
+  }),
+  z.object({
     event: z.literal("vodReady"),
     streamName: streamNameSchema,
     vodId: z.string().min(1).max(64).regex(/^[a-f0-9]+$/),
@@ -79,7 +83,13 @@ export async function POST(req: Request) {
     }
     await prisma.liveStream.update({
       where: { id: stream.id },
-      data: { isLive: true, startedAt: new Date(), lastIngestAt: new Date(), vodVideoId: null },
+      data: {
+        ingestActive: true,
+        isLive: false,
+        startedAt: null,
+        lastIngestAt: new Date(),
+        vodVideoId: null,
+      },
     });
   } else if (parsed.data.event === "donePublish") {
     const stream = await prisma.liveStream.findFirst({
@@ -89,7 +99,18 @@ export async function POST(req: Request) {
     if (!stream) return NextResponse.json({ ok: true });
     await prisma.liveStream.update({
       where: { id: stream.id },
-      data: { isLive: false },
+      data: { ingestActive: false, isLive: false },
+    });
+  } else if (parsed.data.event === "streamState") {
+    const stream = await prisma.liveStream.findFirst({
+      where: { channel: { slug: streamName } },
+      select: { startedAt: true, isLive: true, ingestActive: true },
+    });
+    return NextResponse.json({
+      ok: true,
+      startedAt: stream?.startedAt ?? null,
+      isLive: stream?.isLive ?? false,
+      ingestActive: stream?.ingestActive ?? false,
     });
   } else {
     // vodReady — parsed.data.vodId is accessible because TS narrows to vodReady shape

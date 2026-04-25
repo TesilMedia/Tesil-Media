@@ -195,6 +195,8 @@ model LiveStream {
   streamUrl   String
   // OBS/RTMP ingest key. Null preserves legacy/manual URL streams.
   streamKey   String?  @unique
+  // True while OBS is connected/publishing to RTMP, even before the stream is publicly live.
+  ingestActive Boolean @default(false)
   isLive      Boolean  @default(false)
   viewers     Int      @default(0)
   // Maturity rating: "PG" | "PG13" | "R" | "X". Stored as String for SQLite.

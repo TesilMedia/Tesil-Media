@@ -42,19 +42,49 @@ function remuxOnce(slug: string, segments: string[], mp4Path: string, listPath: 
   return p;
 }
 
-function parseSegments(slug: string): string[] {
+type HlsSegment = {
+  path: string;
+  programDateTime: Date | null;
+};
+
+function parseSegments(slug: string): HlsSegment[] {
   const segDir = join(VOD_ROOT, slug);
   const manifestPath = join(segDir, "index.m3u8");
   try {
     const content = readFileSync(manifestPath, "utf8");
-    return content
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0 && !l.startsWith("#"))
-      .map((seg) => (isAbsolute(seg) ? seg : join(segDir, seg)));
+    const segments: HlsSegment[] = [];
+    let nextProgramDateTime: Date | null = null;
+    for (const line of content.split("\n").map((l) => l.trim())) {
+      if (!line) continue;
+      if (line.startsWith("#EXT-X-PROGRAM-DATE-TIME:")) {
+        const raw = line.slice("#EXT-X-PROGRAM-DATE-TIME:".length);
+        const parsed = new Date(raw);
+        nextProgramDateTime = Number.isNaN(parsed.getTime()) ? null : parsed;
+        continue;
+      }
+      if (line.startsWith("#")) continue;
+      segments.push({
+        path: isAbsolute(line) ? line : join(segDir, line),
+        programDateTime: nextProgramDateTime,
+      });
+      nextProgramDateTime = null;
+    }
+    return segments;
   } catch {
     return [];
   }
+}
+
+function segmentsFromPublicStart(segments: HlsSegment[], startedAt: Date | null): string[] {
+  if (!startedAt) return segments.map((s) => s.path);
+  const publicStartMs = startedAt.getTime();
+  return segments
+    .filter(
+      (segment) =>
+        !segment.programDateTime ||
+        segment.programDateTime.getTime() >= publicStartMs,
+    )
+    .map((segment) => segment.path);
 }
 
 function remux(segments: string[], mp4Path: string, listPath: string): Promise<void> {
@@ -112,7 +142,10 @@ export async function GET(
 
   if (!alreadyRemuxed) {
     pruneOldSessions();
-    const segments = parseSegments(slug);
+    const segments = segmentsFromPublicStart(
+      parseSegments(slug),
+      channel.stream.startedAt,
+    );
     if (segments.length === 0) {
       return NextResponse.json({ error: "No segments available yet." }, { status: 503 });
     }

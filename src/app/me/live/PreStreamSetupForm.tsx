@@ -1,0 +1,367 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+import { CategoryPicker } from "@/components/CategoryPicker";
+import { LivePlayerToggle } from "@/components/LivePlayerToggle";
+import { VideoCategory } from "@/lib/categories";
+import {
+  CONTENT_RATINGS,
+  ContentRating,
+  DEFAULT_VIDEO_RATING,
+  RATING_META,
+} from "@/lib/ratings";
+
+type StreamState = {
+  title: string;
+  category: string | null;
+  rating: string;
+  thumbnail: string | null;
+  ingestActive: boolean;
+  isLive: boolean;
+  startedAt: string | null;
+};
+
+type SetupResponse = {
+  ok?: boolean;
+  error?: string;
+  slug?: string;
+  stream?: StreamState;
+};
+
+type Props = {
+  slug: string;
+  initialTitle: string;
+  initialCategory: string | null;
+  initialRating: string;
+  initialThumbnail: string | null;
+  initialIngestActive: boolean;
+  initialIsLive: boolean;
+  initialStartedAt: Date | string | null;
+};
+
+function normalizeRating(value: string): ContentRating {
+  const upper = value.toUpperCase();
+  if (upper === "PG-13") return "PG13";
+  return (CONTENT_RATINGS as readonly string[]).includes(upper)
+    ? (upper as ContentRating)
+    : DEFAULT_VIDEO_RATING;
+}
+
+export function PreStreamSetupForm({
+  slug,
+  initialTitle,
+  initialCategory,
+  initialRating,
+  initialThumbnail,
+  initialIngestActive,
+  initialIsLive,
+  initialStartedAt,
+}: Props) {
+  const router = useRouter();
+  const [title, setTitle] = useState(initialTitle);
+  const [category, setCategory] = useState<VideoCategory | null>(
+    (initialCategory as VideoCategory | null) ?? null,
+  );
+  const [rating, setRating] = useState<ContentRating>(
+    normalizeRating(initialRating),
+  );
+  const [thumbnail, setThumbnail] = useState<string | null>(initialThumbnail);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [removeThumbnail, setRemoveThumbnail] = useState(false);
+  const [ingestActive, setIngestActive] = useState(initialIngestActive);
+  const [isLive, setIsLive] = useState(initialIsLive);
+  const [startedAt, setStartedAt] = useState<string | null>(
+    initialStartedAt instanceof Date
+      ? initialStartedAt.toISOString()
+      : initialStartedAt,
+  );
+  const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const canGoLive = ingestActive && !isLive;
+
+  async function refreshState() {
+    try {
+      const res = await fetch("/api/stream/setup", { cache: "no-store" });
+      const data = (await res.json().catch(() => ({}))) as SetupResponse;
+      if (!res.ok || !data.stream) return;
+      setIngestActive(Boolean(data.stream.ingestActive));
+      setIsLive(Boolean(data.stream.isLive));
+      setStartedAt(data.stream.startedAt ?? null);
+      if (!thumbnailFile && !removeThumbnail) {
+        setThumbnail(data.stream.thumbnail ?? null);
+      }
+    } catch {
+      // Ignore transient status refresh failures.
+    }
+  }
+
+  async function saveSetup(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      setError("Title is required.");
+      return;
+    }
+    if (!category) {
+      setError("Please choose a category.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const formData = new FormData();
+      formData.set("title", trimmedTitle);
+      formData.set("category", category);
+      formData.set("rating", rating);
+      if (thumbnailFile) {
+        formData.set("thumbnail", thumbnailFile);
+      }
+      if (removeThumbnail) {
+        formData.set("removeThumbnail", "1");
+      }
+
+      const res = await fetch("/api/stream/setup", {
+        method: "PATCH",
+        body: formData,
+      });
+      const data = (await res.json().catch(() => ({}))) as SetupResponse;
+      if (!res.ok || !data.stream) {
+        setError(data.error ?? `Failed to save setup (HTTP ${res.status}).`);
+        return;
+      }
+
+      setTitle(data.stream.title);
+      setCategory((data.stream.category as VideoCategory | null) ?? null);
+      setRating(normalizeRating(data.stream.rating));
+      setThumbnail(data.stream.thumbnail ?? null);
+      setThumbnailFile(null);
+      setRemoveThumbnail(false);
+      setIngestActive(Boolean(data.stream.ingestActive));
+      setIsLive(Boolean(data.stream.isLive));
+      setStartedAt(data.stream.startedAt ?? null);
+      setSuccess("Setup saved.");
+      router.refresh();
+    } catch {
+      setError("Network error while saving setup.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function goLive() {
+    setError(null);
+    setSuccess(null);
+    setPublishing(true);
+    try {
+      const res = await fetch("/api/stream/go-live", { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        startedAt?: string | null;
+      };
+      if (!res.ok) {
+        setError(data.error ?? `Failed to go live (HTTP ${res.status}).`);
+        return;
+      }
+      setIsLive(true);
+      setStartedAt(data.startedAt ?? new Date().toISOString());
+      setSuccess("You are now live.");
+      router.push(`/live/${slug}`);
+      router.refresh();
+    } catch {
+      setError("Network error while going live.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="space-y-3">
+        <LivePlayerToggle
+          slug={slug}
+          isLive={isLive}
+          title={`${title} (private preview)`}
+          startedAt={startedAt}
+          vodVideoId={null}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          {isLive ? (
+            <span className="rounded bg-live px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-white">
+              Live
+            </span>
+          ) : ingestActive ? (
+            <span className="rounded bg-accent px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-on-accent">
+              Preview ready
+            </span>
+          ) : (
+            <span className="rounded bg-surface-2 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-muted">
+              Waiting for OBS
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => void refreshState()}
+            className="rounded-full border border-border bg-surface px-3 py-1 text-xs hover:bg-surface-2"
+          >
+            Refresh status
+          </button>
+          <Link
+            href={`/live/${slug}`}
+            className="rounded-full border border-border bg-surface px-3 py-1 text-xs hover:bg-surface-2"
+          >
+            Open public page
+          </Link>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-border bg-surface p-4">
+        {error ? (
+          <div className="mb-3 rounded-md border border-danger-border bg-danger-bg px-3 py-2 text-sm text-danger">
+            {error}
+          </div>
+        ) : null}
+        {success ? (
+          <div className="mb-3 rounded-md border border-success-border bg-success-bg px-3 py-2 text-sm text-success">
+            {success}
+          </div>
+        ) : null}
+
+        <form onSubmit={saveSetup} className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-muted">Title *</span>
+            <input
+              name="title"
+              type="text"
+              required
+              maxLength={200}
+              value={title}
+              onChange={(e) => setTitle(e.currentTarget.value)}
+              disabled={saving || publishing}
+              className="rounded-md border border-border bg-bg px-3 py-2 outline-none focus:border-accent/60 disabled:opacity-60"
+            />
+          </label>
+
+          <CategoryPicker
+            value={category}
+            onChange={setCategory}
+            disabled={saving || publishing}
+            required
+          />
+
+          <fieldset
+            className="flex flex-col gap-2 text-sm"
+            disabled={saving || publishing}
+          >
+            <legend className="text-muted">Content rating *</legend>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {CONTENT_RATINGS.map((r) => {
+                const meta = RATING_META[r];
+                const selected = rating === r;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setRating(r)}
+                    aria-pressed={selected}
+                    className={`flex flex-col items-start gap-1 rounded-md border px-3 py-2 text-left transition ${
+                      selected
+                        ? "border-accent/70 bg-surface-2"
+                        : "border-border bg-bg hover:border-accent/50 hover:bg-surface-2"
+                    } disabled:opacity-60`}
+                  >
+                    <span
+                      className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 font-display text-[11px] uppercase tracking-wider ${meta.badgeClass}`}
+                    >
+                      {meta.label}
+                    </span>
+                    <span className="text-xs text-muted">{meta.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="text-muted">Thumbnail (optional)</span>
+            {thumbnail && !removeThumbnail ? (
+              <div className="overflow-hidden rounded-md border border-border">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={thumbnail}
+                  alt=""
+                  className="h-32 w-full object-cover"
+                />
+              </div>
+            ) : null}
+            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed border-border bg-bg px-3 py-3 text-sm hover:border-accent/50 hover:bg-surface-2">
+              <span className="min-w-0 flex-1 truncate text-text">
+                {thumbnailFile?.name ?? "Choose thumbnail image"}
+              </span>
+              <span className="shrink-0 rounded-full bg-surface-2 px-3 py-1 text-xs text-muted">
+                Browse
+              </span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.currentTarget.files?.[0] ?? null;
+                  setThumbnailFile(file);
+                  if (file) setRemoveThumbnail(false);
+                }}
+                disabled={saving || publishing}
+              />
+            </label>
+            {thumbnail || thumbnailFile ? (
+              <button
+                type="button"
+                className="w-fit rounded-full border border-border bg-surface px-3 py-1 text-xs hover:bg-surface-2"
+                onClick={() => {
+                  setThumbnailFile(null);
+                  setRemoveThumbnail(true);
+                  setThumbnail(null);
+                }}
+                disabled={saving || publishing}
+              >
+                Remove thumbnail
+              </button>
+            ) : null}
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="submit"
+              disabled={saving || publishing}
+              className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-60"
+            >
+              {saving ? "Saving..." : "Save setup"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void goLive()}
+              disabled={!canGoLive || saving || publishing}
+              className="rounded-md bg-live px-4 py-2 text-sm font-semibold text-white hover:brightness-105 disabled:opacity-60"
+            >
+              {publishing ? "Going live..." : isLive ? "Live now" : "Go live"}
+            </button>
+          </div>
+          {!ingestActive && !isLive ? (
+            <p className="text-xs text-muted">
+              Start streaming in OBS first. Once ingest is active, this button
+              becomes available.
+            </p>
+          ) : null}
+        </form>
+      </section>
+    </div>
+  );
+}

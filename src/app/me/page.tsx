@@ -39,7 +39,7 @@ export default async function ProfilePage() {
       streamUrl: `/hls/${channel.slug}/index.m3u8`,
       isLive: false,
     },
-    select: { isLive: true, streamKey: true },
+    select: { isLive: true, streamKey: true, ingestActive: true },
   });
 
   const [videos, totalViews, userPrefs] = await Promise.all([
@@ -112,6 +112,7 @@ export default async function ProfilePage() {
           <GoLiveCard
             slug={channel.slug}
             isLive={stream.isLive}
+            ingestActive={stream.ingestActive}
             hasStreamKey={Boolean(stream.streamKey)}
           />
           <ContentFilterCard initialHidden={hiddenRatings} />

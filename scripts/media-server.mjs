@@ -147,6 +147,39 @@ async function postHookPayloadAsync(payload) {
   if (!response.ok) {
     throw new Error(`Hook rejected with HTTP ${response.status}`);
   }
+  return response.json();
+}
+
+function openPreStreamSetupPage(streamName) {
+  const url = `${NEXT_APP_URL}/me/live?slug=${encodeURIComponent(streamName)}`;
+  try {
+    if (process.platform === "win32") {
+      const child = spawn("cmd", ["/c", "start", "", url], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      child.unref();
+      return;
+    }
+    if (process.platform === "darwin") {
+      const child = spawn("open", [url], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      child.unref();
+      return;
+    }
+    const child = spawn("xdg-open", [url], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    child.unref();
+  } catch (err) {
+    console.warn("[nms] unable to auto-open pre-stream setup page:", err);
+  }
 }
 
 /**
@@ -296,14 +329,40 @@ function ensureEndlist(manifestPath) {
 function parseHlsSegments(manifestPath, segDir) {
   try {
     const content = readFileSync(manifestPath, "utf8");
-    return content
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0 && !l.startsWith("#"))
-      .map((seg) => (path.isAbsolute(seg) ? seg : path.join(segDir, seg)));
+    const segments = [];
+    let nextProgramDateTime = null;
+    for (const line of content.split("\n").map((l) => l.trim())) {
+      if (!line) continue;
+      if (line.startsWith("#EXT-X-PROGRAM-DATE-TIME:")) {
+        const raw = line.slice("#EXT-X-PROGRAM-DATE-TIME:".length);
+        const parsed = new Date(raw);
+        nextProgramDateTime = Number.isNaN(parsed.getTime()) ? null : parsed;
+        continue;
+      }
+      if (line.startsWith("#")) continue;
+      segments.push({
+        path: path.isAbsolute(line) ? line : path.join(segDir, line),
+        programDateTime: nextProgramDateTime,
+      });
+      nextProgramDateTime = null;
+    }
+    return segments;
   } catch {
     return [];
   }
+}
+
+function segmentsFromPublicStart(segments, startedAt) {
+  if (!startedAt) return segments.map((s) => s.path);
+  const publicStart = new Date(startedAt);
+  if (Number.isNaN(publicStart.getTime())) return segments.map((s) => s.path);
+  return segments
+    .filter(
+      (segment) =>
+        !segment.programDateTime ||
+        segment.programDateTime.getTime() >= publicStart.getTime(),
+    )
+    .map((segment) => segment.path);
 }
 
 /**
@@ -390,6 +449,7 @@ async function main() {
     try {
       postHookSync({ event: "prePublish", streamName, key });
       authorizedStreams.add(streamName);
+      openPreStreamSetupPage(streamName);
     } catch (err) {
       console.error("[nms] prePublish hook failed:", err);
       authorizedStreams.delete(streamName);
@@ -432,7 +492,19 @@ async function main() {
 
       const manifestPath = path.join(vod.vodHlsDir, "index.m3u8");
       ensureEndlist(manifestPath);
-      const segments = parseHlsSegments(manifestPath, vod.vodHlsDir);
+      let streamState = null;
+      try {
+        streamState = await postHookPayloadAsync({
+          event: "streamState",
+          streamName,
+        });
+      } catch (err) {
+        console.error("[remux] failed to load stream state:", err);
+      }
+      const segments = segmentsFromPublicStart(
+        parseHlsSegments(manifestPath, vod.vodHlsDir),
+        streamState?.startedAt ?? null,
+      );
 
       if (segments.length === 0) {
         console.warn(`[remux] no segments for ${streamName} — skipping VOD`);
