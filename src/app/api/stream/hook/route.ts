@@ -1,8 +1,10 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import path from "node:path";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
+import { generateMidframeThumbnail } from "@/lib/videoQualities";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,16 +83,19 @@ export async function POST(req: Request) {
     ) {
       return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     }
-    await prisma.liveStream.update({
-      where: { id: stream.id },
-      data: {
-        ingestActive: true,
-        isLive: false,
-        startedAt: null,
-        lastIngestAt: new Date(),
-        vodVideoId: null,
-      },
-    });
+    await prisma.$transaction([
+      prisma.liveMessage.deleteMany({ where: { streamId: stream.id } }),
+      prisma.liveStream.update({
+        where: { id: stream.id },
+        data: {
+          ingestActive: true,
+          isLive: false,
+          startedAt: null,
+          lastIngestAt: new Date(),
+          vodVideoId: null,
+        },
+      }),
+    ]);
   } else if (parsed.data.event === "donePublish") {
     const stream = await prisma.liveStream.findFirst({
       where: { channel: { slug: streamName } },
@@ -125,20 +130,34 @@ export async function POST(req: Request) {
       },
     });
     if (!liveStream) return NextResponse.json({ ok: true });
+
+    let thumbnail = liveStream.thumbnail ?? null;
+    if (!thumbnail) {
+      const vodAbs = path.join(
+        process.cwd(),
+        "public",
+        "uploads",
+        "videos",
+        `${parsed.data.vodId}.mp4`,
+      );
+      const thumbDir = path.join(process.cwd(), "public", "uploads", "thumbnails");
+      thumbnail = await generateMidframeThumbnail(vodAbs, thumbDir);
+    }
+
     const vodVideo = await prisma.video.create({
       data: {
         id: randomUUID(),
         title: liveStream.title,
         category: liveStream.category ?? null,
         rating: liveStream.rating,
-        thumbnail: liveStream.thumbnail ?? null,
+        thumbnail,
         sourceUrl: `/uploads/videos/${parsed.data.vodId}.mp4`,
         channelId: liveStream.channelId,
       },
     });
     await prisma.liveStream.update({
       where: { channelId: liveStream.channelId },
-      data: { vodVideoId: vodVideo.id },
+      data: { vodVideoId: vodVideo.id, thumbnail: null },
     });
   }
 

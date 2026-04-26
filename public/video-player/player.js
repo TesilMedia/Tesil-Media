@@ -20,6 +20,7 @@
   const playPause = document.getElementById("playPause");
   const progress = document.getElementById("progress");
   const timeDisplay = document.getElementById("timeDisplay");
+  const timeGroup = document.getElementById("timeGroup");
   const muteBtn = document.getElementById("mute");
   const volumeSlider = document.getElementById("volume");
   const pipBtn = document.getElementById("pip");
@@ -116,6 +117,12 @@
     String(startupQuery.get("hostBridge") || "").toLowerCase()
   );
   const startupDisableSeek = startupQuery.get("disableSeek") === "1";
+  const startupHideLivePill = startupQuery.get("hideLivePill") === "1";
+  const startupHideTimeGroup = startupQuery.get("hideTimeGroup") === "1";
+
+  if (startupHideTimeGroup) {
+    if (timeGroup instanceof HTMLElement) timeGroup.hidden = true;
+  }
 
   if (startupDisableSeek) {
     if (progressWrap instanceof HTMLElement) progressWrap.hidden = true;
@@ -123,6 +130,12 @@
       progress.disabled = true;
       progress.tabIndex = -1;
     }
+    if (frameBackBtn instanceof HTMLElement) frameBackBtn.hidden = true;
+    if (frameForwardBtn instanceof HTMLElement) frameForwardBtn.hidden = true;
+    if (goLiveBtn instanceof HTMLElement) goLiveBtn.hidden = true;
+  }
+
+  if (startupHideLivePill) {
     if (goLiveBtn instanceof HTMLElement) goLiveBtn.hidden = true;
   }
 
@@ -372,7 +385,12 @@
       opts && opts.live === true ? true : autoplayMuteFallbackOk();
     const p = video.play();
     if (p && typeof p.catch === "function") {
-      p.catch(() => {
+      p.catch((err) => {
+        // AbortError: play() was interrupted by a concurrent seek or load reset
+        // (common on Chrome when hls.js calls startLoad(-1) at the same time).
+        // Silently ignore — BUFFER_APPENDED will re-enter tryPlayLiveMedia once
+        // the new fragment arrives and retry the play call.
+        if (err && err.name === "AbortError") return;
         if (!allowMuteRetry) return;
         if (!video.muted) {
           video.muted = true;
@@ -386,9 +404,10 @@
 
   function tryPlayLiveMedia() {
     if (!isLiveStream()) return;
-    // After the first play, respect an explicit user pause rather than force-resuming
-    // every time a new segment arrives (BUFFER_APPENDED fires every ~2s).
-    if (liveHasEverPlayed && video.paused) return;
+    // Respect an explicit user pause: do not force-resume on every BUFFER_APPENDED
+    // tick. `liveUserWantsPlaying` is set true when the user clicks play and false
+    // when they click pause, so stall-induced aborts are still recovered.
+    if (liveHasEverPlayed && !liveUserWantsPlaying) return;
     attemptPlayWithAutoplayMuteFallback({ live: true });
   }
 
@@ -437,9 +456,11 @@
    * events after MANIFEST_PARSED, so retry on later events instead of seeking just once.
    */
   let pendingInitialLiveSeek = false;
-  /** Set to true once the live video has played for the first time. Prevents `tryPlayLiveMedia`
-   *  from force-resuming a video the user explicitly paused (e.g. to frame-step or scrub). */
+  /** Set to true once the live video has played for the first time. */
   let liveHasEverPlayed = false;
+  /** Set to true when the user explicitly clicks play on a live stream; false when they pause.
+   *  Lets tryPlayLiveMedia distinguish a deliberate pause from a stall-induced one. */
+  let liveUserWantsPlaying = false;
   /** Clears a stuck `pendingInitialLiveSeek` if `seekable` never appears (rare). */
   let initialLiveSeekGuardTimer = null;
   /** Polls `tryConsumeInitialLiveSeek` at a fixed cadence for cross-browser parity. */
@@ -505,7 +526,7 @@
 
   function syncLiveButtonUI() {
     if (!(goLiveBtn instanceof HTMLElement)) return;
-    if (startupDisableSeek) return;
+    if (startupDisableSeek || startupHideLivePill) return;
     const live = isLiveStream();
     goLiveBtn.hidden = !live;
     if (!live) return;
@@ -1673,6 +1694,7 @@
         fragLoadPolicy: retryPolicy,
       });
       liveHasEverPlayed = false;
+      liveUserWantsPlaying = false;
       hlsInstance = instance;
       requestInitialLiveSeek();
       instance.on(HlsCtor.Events.MANIFEST_PARSED, () => {
@@ -2940,7 +2962,14 @@
   });
 
   video.addEventListener("playing", () => {
-    if (isLiveStream()) liveHasEverPlayed = true;
+    if (isLiveStream()) {
+      liveHasEverPlayed = true;
+      // Mirror the user's intent: once the stream is actually playing, record
+      // that playback is desired so stall-recovery retries work automatically.
+      liveUserWantsPlaying = true;
+      if (frameBackBtn instanceof HTMLElement) frameBackBtn.hidden = true;
+      if (frameForwardBtn instanceof HTMLElement) frameForwardBtn.hidden = true;
+    }
     tryConsumeInitialLiveSeek();
     syncLiveButtonUI();
     startLiveClock();
@@ -2948,6 +2977,31 @@
 
   video.addEventListener("durationchange", syncLiveButtonUI);
   video.addEventListener("progress", syncLiveButtonUI);
+
+  // After a seek completes, retry play() for live streams when the user wants
+  // to be playing. This recovers the common Chrome stuck-state where play() is
+  // called concurrently with a seek (seekToLiveEdge) and gets aborted — by the
+  // time "seeked" fires the position is correct and hls.js has usually already
+  // appended data there.
+  video.addEventListener("seeked", () => {
+    if (player.dataset.scrubbing === "true") return;
+    if (isLiveStream() && liveUserWantsPlaying) {
+      tryPlayLiveMedia();
+    }
+  });
+
+  // Chrome-specific: when the MSE buffer runs dry at currentTime, Chrome can
+  // leave the video in a "playing but frozen" state (fires `waiting`, not
+  // `pause`). Kick hls.js to start loading from the current position if it has
+  // gone idle, so BUFFER_APPENDED fires and unblocks playback.
+  video.addEventListener("waiting", () => {
+    if (!isLiveStream() || !liveUserWantsPlaying) return;
+    if (hlsInstance) {
+      try {
+        hlsInstance.startLoad(video.currentTime);
+      } catch (_) {}
+    }
+  });
 
   video.addEventListener("play", () => {
     setState(true);
@@ -2987,8 +3041,24 @@
 
   function togglePlay() {
     if (video.paused) {
-      video.play().catch(() => {});
+      if (isLiveStream()) {
+        liveUserWantsPlaying = true;
+        // Do NOT call stopLoad()+startLoad(-1) here. On Chrome that sequence
+        // aggressively resets the MSE SourceBuffer and races with play(), causing
+        // spurious `pause` events and blocking the muted-autoplay fallback.
+        // hls.js detects the seeking event from seekToLiveEdge() automatically
+        // and adjusts its load position. The LIVE button uses the full reset
+        // for the genuine "far behind live" recovery case.
+        requestInitialLiveSeek();
+        seekToLiveEdge();
+        attemptPlayWithAutoplayMuteFallback({ live: true });
+        syncLiveButtonUI();
+        updateTimeDisplay();
+      } else {
+        video.play().catch(() => {});
+      }
     } else {
+      liveUserWantsPlaying = false;
       video.pause();
     }
   }

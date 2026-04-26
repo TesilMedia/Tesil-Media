@@ -82,7 +82,7 @@ export function CommentLikeDislike({
         className={[
           "flex items-center gap-1 rounded px-1 py-0.5 transition-colors",
           vote === 1
-            ? "text-accent"
+            ? "text-accent-blue"
             : "text-muted hover:text-text",
           disabled ? "cursor-default" : "cursor-pointer",
         ].join(" ")}
@@ -163,7 +163,7 @@ export function VideoLikeBar({
         className={[
           "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
           vote === 1
-            ? "border-accent bg-accent/10 text-accent"
+            ? "border-accent-blue bg-accent-blue/10 text-accent-blue"
             : "border-border bg-surface text-text hover:bg-surface-2",
           disabled ? "cursor-default opacity-70" : "cursor-pointer",
         ].join(" ")}
@@ -195,7 +195,7 @@ export function VideoLikeBar({
           title={`${Math.round(likeRatio * 100)}% positive`}
         >
           <div
-            className="h-full rounded-full bg-accent transition-all"
+            className="h-full rounded-full bg-accent-blue transition-all"
             style={{ width: `${likeRatio * 100}%` }}
           />
         </div>

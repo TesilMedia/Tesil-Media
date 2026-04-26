@@ -223,7 +223,7 @@ export default async function WatchPage({
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
             <Link
               href={`/c/${video.channel.slug}`}
-              className="flex items-center gap-3"
+              className="flex w-fit items-center gap-3"
             >
               <span className="h-10 w-10 overflow-hidden rounded-full bg-surface-2">
                 {video.channel.avatarUrl ? (

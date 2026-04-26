@@ -18,6 +18,8 @@ export function LivePlayerToggle({ slug, isLive, title, startedAt, vodVideoId }:
         title={title}
         liveStartedAt={isLive ? startedAt : null}
         disableSeek={isLive}
+        hideLivePill={!isLive}
+        hideTimeGroup={!isLive}
       />
       {(isLive || vodVideoId) && (
         <div className="mt-2 flex gap-2">

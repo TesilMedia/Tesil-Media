@@ -2,6 +2,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import { unlink } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
 
 const execFileAsync = promisify(execFile);
 
@@ -78,6 +80,61 @@ export async function unlinkRungFilesForVideoId(
     await unlink(path.join(videoDir, `${videoId}-${rung}p.mp4`)).catch(
       () => {},
     );
+  }
+}
+
+async function probeVideoDuration(inputAbs: string): Promise<number | null> {
+  try {
+    const { stdout } = await execFileAsync(
+      "ffprobe",
+      [
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "csv=p=0",
+        inputAbs,
+      ],
+      { maxBuffer: 2 * 1024 * 1024 },
+    );
+    const n = Number.parseFloat(String(stdout).trim());
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extracts a JPEG frame from the middle of the video and saves it to the
+ * thumbnails directory. Returns the public URL, or null on failure.
+ */
+export async function generateMidframeThumbnail(
+  inputAbs: string,
+  thumbnailDir: string,
+): Promise<string | null> {
+  try {
+    const duration = await probeVideoDuration(inputAbs);
+    if (duration == null) return null;
+
+    const seekSecs = duration / 2;
+    const filename = `${randomUUID()}.jpg`;
+    const outputAbs = path.join(thumbnailDir, filename);
+
+    await mkdir(thumbnailDir, { recursive: true });
+    await execFileAsync(
+      "ffmpeg",
+      [
+        "-y",
+        "-ss", String(seekSecs),
+        "-i", inputAbs,
+        "-frames:v", "1",
+        "-q:v", "2",
+        outputAbs,
+      ],
+      { maxBuffer: 10 * 1024 * 1024, timeout: 30_000 },
+    );
+
+    return `/uploads/thumbnails/${filename}`;
+  } catch {
+    return null;
   }
 }
 

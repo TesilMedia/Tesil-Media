@@ -194,7 +194,7 @@ export function Comments({
                   <button
                     type="button"
                     onClick={() => toggleRoot(root.comment.id)}
-                    className="ml-12 self-start text-xs font-medium text-accent-blue hover:text-accent-blue-hover"
+                    className="ml-12 self-start text-xs font-medium text-accent hover:text-accent-hover"
                   >
                     {expanded ? "Hide" : "Show"} {total}{" "}
                     {total === 1 ? "reply" : "replies"}
@@ -368,7 +368,7 @@ function CommentNode({
           )}
 
           {!editing ? (
-            <div className="mt-1 flex items-center gap-3 text-xs text-muted">
+            <div className="mt-1 flex items-center gap-2 text-xs text-muted">
               <CommentLikeDislike
                 commentId={c.id}
                 initialLikes={c.likes}
@@ -533,7 +533,7 @@ function CommentForm({
           placeholder={placeholder}
           rows={2}
           autoFocus={autoFocus}
-          className="w-full resize-y rounded-md border border-border bg-bg p-2 text-sm outline-none focus:border-accent"
+          className="w-full resize-y rounded-md border border-border bg-bg p-2 text-base outline-none focus:border-accent"
           disabled={submitting}
         />
         <div className="mt-2 flex justify-end gap-2">

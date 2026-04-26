@@ -61,7 +61,7 @@ export default async function BeginningPage({
           </div>
           <Link
             href={`/c/${channel.slug}`}
-            className="mt-2 flex items-center gap-3"
+            className="mt-2 flex w-fit items-center gap-3"
           >
             <span className="h-9 w-9 overflow-hidden rounded-full bg-surface-2">
               {channel.avatarUrl ? (

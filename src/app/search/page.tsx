@@ -84,7 +84,7 @@ export default async function SearchPage({
               <Link
                 key={c.id}
                 href={`/c/${c.slug}`}
-                className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2 hover:bg-surface-2"
+                className="flex w-fit items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2 hover:bg-surface-2"
               >
                 <span className="h-10 w-10 overflow-hidden rounded-full bg-surface-2">
                   {c.avatarUrl ? (

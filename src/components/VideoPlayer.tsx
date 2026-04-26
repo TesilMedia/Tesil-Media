@@ -13,6 +13,10 @@ type VideoPlayerProps = {
   liveStartedAt?: Date | string | null;
   /** Hides the seek bar. Used for the true-live player. */
   disableSeek?: boolean;
+  /** Hides the LIVE pill. Used for pre-stream players where the HLS source is live but the broadcast hasn't started. */
+  hideLivePill?: boolean;
+  /** Hides the entire time-group (timestamp + frame-step buttons). Used for pre-stream players. */
+  hideTimeGroup?: boolean;
 };
 
 /**
@@ -33,6 +37,8 @@ export function VideoPlayer({
   className,
   liveStartedAt,
   disableSeek,
+  hideLivePill,
+  hideTimeGroup,
 }: VideoPlayerProps) {
   const startedAtIso =
     liveStartedAt instanceof Date
@@ -50,7 +56,7 @@ export function VideoPlayer({
           startedAtIso,
         )}${vidQ}`
       : `/video-player/embed.html?src=${encodeURIComponent(src)}${vidQ}`;
-  const extraParams = [disableSeek ? "disableSeek=1" : ""].filter(Boolean).join("&");
+  const extraParams = [disableSeek ? "disableSeek=1" : "", hideLivePill ? "hideLivePill=1" : "", hideTimeGroup ? "hideTimeGroup=1" : ""].filter(Boolean).join("&");
   const iframeSrc = `${base}&autoplay=1${extraParams ? `&${extraParams}` : ""}`;
   return (
     <div

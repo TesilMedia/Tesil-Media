@@ -31,6 +31,7 @@ model User {
   comments       Comment[]
   videoLikes     VideoLike[]
   commentLikes   CommentLike[]
+  liveMessages   LiveMessage[]
 }
 
 model Account {
@@ -212,6 +213,22 @@ model LiveStream {
   channelId String  @unique
   channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
+  messages LiveMessage[]
+
   @@index([category])
+}
+
+model LiveMessage {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+
+  streamId String
+  stream   LiveStream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([streamId, createdAt])
 }
 

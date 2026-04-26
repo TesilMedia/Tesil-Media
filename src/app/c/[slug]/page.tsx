@@ -128,6 +128,8 @@ export default async function ChannelPage({
                   thumbnail={channel.stream.thumbnail}
                   viewers={channel.stream.viewers}
                   rating={channel.stream.rating}
+                  isLive={isLive}
+                  streamUrl={channel.stream.streamUrl}
                 />
               ) : null}
               {channel.videos.map((v) => (

@@ -12,6 +12,11 @@ import {
 import { formatDuration, formatViews } from "@/lib/format";
 import { titleOverflowClampClass } from "@/lib/titleClamp";
 import { RatingBadge } from "@/components/RatingBadge";
+import {
+  takePreviewLease,
+  releasePreviewLease,
+  useTrueHover,
+} from "@/lib/previewLease";
 
 type VideoCardProps = {
   id: string;
@@ -34,37 +39,6 @@ type VideoCardProps = {
 
 const HOVER_DELAY_MS = 400;
 
-const TRUE_HOVER_MQ = "(hover: hover) and (pointer: fine)";
-
-function useTrueHover() {
-  const [trueHover, setTrueHover] = useState<boolean | null>(null);
-  useEffect(() => {
-    const mq = window.matchMedia(TRUE_HOVER_MQ);
-    const update = () => setTrueHover(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-  return trueHover;
-}
-
-/** Only one card preview at a time — avoids many muted videos starting at once. */
-type PreviewLeaseRelease = () => void;
-let activePreviewRelease: PreviewLeaseRelease | null = null;
-
-function takePreviewLease(release: PreviewLeaseRelease) {
-  if (activePreviewRelease && activePreviewRelease !== release) {
-    activePreviewRelease();
-  }
-  activePreviewRelease = release;
-}
-
-function releasePreviewLease(release: PreviewLeaseRelease) {
-  if (activePreviewRelease === release) {
-    activePreviewRelease = null;
-  }
-}
-
 export function VideoCard(props: VideoCardProps) {
   const previewSrc = getPreviewableSrc(props.sourceUrl);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -81,8 +55,7 @@ export function VideoCard(props: VideoCardProps) {
     }
   };
 
-  /** Stable per mount: used with global lease so only one preview plays app-wide. */
-  const previewLeaseReleaseRef = useRef<PreviewLeaseRelease | null>(null);
+  const previewLeaseReleaseRef = useRef<(() => void) | null>(null);
   if (!previewLeaseReleaseRef.current) {
     previewLeaseReleaseRef.current = () => {
       const self = previewLeaseReleaseRef.current;

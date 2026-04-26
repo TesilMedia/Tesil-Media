@@ -45,6 +45,8 @@ export default async function HomePage() {
                 thumbnail={s.thumbnail}
                 viewers={s.viewers}
                 rating={s.rating}
+                isLive={s.isLive}
+                streamUrl={s.streamUrl}
               />
             ))}
           </div>

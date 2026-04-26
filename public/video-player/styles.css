@@ -654,7 +654,9 @@ body.page--embed-host {
 
 /* `display: flex` above wins over the default [hidden] rule; force hide when toggled in JS */
 .player__scrub-preview[hidden],
-.player__progress-wrap[hidden] {
+.player__progress-wrap[hidden],
+.player__time-group[hidden],
+.player__btn--frame[hidden] {
   display: none !important;
 }
 
@@ -960,7 +962,7 @@ body.page--embed-host {
   flex-shrink: 0;
   min-width: max-content;
   height: var(--chrome-control-height);
-  padding: 0;
+  padding: 0 0.75rem;
   background: var(--chrome-control-bg);
   border: 1px solid var(--chrome-control-border);
   border-radius: 9999px;
