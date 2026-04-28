@@ -18,7 +18,7 @@ import Busboy from "@fastify/busboy";
 
 
 
-import { auth } from "@/lib/auth";
+import { getAuthUser } from "@/lib/mobileAuth";
 
 import { prisma } from "@/lib/prisma";
 
@@ -548,15 +548,15 @@ async function parseMultipartUpload(
 
 export async function POST(req: Request) {
 
-  const session = await auth();
+  const authUser = await getAuthUser(req);
 
-  if (!session?.user?.id) {
+  if (!authUser) {
 
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
   }
 
-  const userId = session.user.id;
+  const userId = authUser.id;
 
 
 

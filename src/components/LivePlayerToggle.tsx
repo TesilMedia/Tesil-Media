@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ReactNode } from "react";
 
 import { VideoPlayer } from "@/components/VideoPlayer";
 
@@ -8,9 +9,10 @@ type Props = {
   title: string;
   startedAt: Date | string | null;
   vodVideoId: string | null;
+  action?: ReactNode;
 };
 
-export function LivePlayerToggle({ slug, isLive, title, startedAt, vodVideoId }: Props) {
+export function LivePlayerToggle({ slug, isLive, title, startedAt, vodVideoId, action }: Props) {
   return (
     <div>
       <VideoPlayer
@@ -35,6 +37,7 @@ export function LivePlayerToggle({ slug, isLive, title, startedAt, vodVideoId }:
           >
             Watch from beginning
           </Link>
+          {action}
         </div>
       )}
     </div>

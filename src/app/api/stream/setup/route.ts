@@ -4,7 +4,7 @@ import { mkdir, unlink, writeFile } from "node:fs/promises";
 
 import { NextResponse } from "next/server";
 
-import { auth } from "@/lib/auth";
+import { getAuthUser } from "@/lib/mobileAuth";
 import { isVideoCategory, VideoCategory } from "@/lib/categories";
 import { prisma } from "@/lib/prisma";
 import { ContentRating, isContentRating } from "@/lib/ratings";
@@ -49,13 +49,13 @@ async function ensureLiveStream(channelId: string, channelSlug: string, channelN
   });
 }
 
-export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
+export async function GET(req: Request) {
+  const authUser = await getAuthUser(req);
+  if (!authUser) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
-  const channel = await ensureChannelForUser(session.user.id);
+  const channel = await ensureChannelForUser(authUser.id);
   if (!channel) {
     return NextResponse.json(
       { error: "Your session is no longer valid. Please sign in again." },
@@ -81,12 +81,12 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const authUser = await getAuthUser(req);
+  if (!authUser) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
-  const channel = await ensureChannelForUser(session.user.id);
+  const channel = await ensureChannelForUser(authUser.id);
   if (!channel) {
     return NextResponse.json(
       { error: "Your session is no longer valid. Please sign in again." },

@@ -3,7 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 
-import { auth } from "@/lib/auth";
+import { getAuthUser } from "@/lib/mobileAuth";
 import { prisma } from "@/lib/prisma";
 import { ContentRating, isContentRating } from "@/lib/ratings";
 import { VideoCategory, isVideoCategory } from "@/lib/categories";
@@ -47,6 +47,64 @@ async function safeUnlinkPublicUrl(url: string | null | undefined) {
   }
 }
 
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const authUser = await getAuthUser(req);
+
+  const video = await prisma.video.findUnique({
+    where: { id },
+    include: {
+      channel: {
+        select: { slug: true, name: true, avatarUrl: true, followers: true, ownerId: true },
+      },
+    },
+  });
+  if (!video) {
+    return NextResponse.json({ error: "Video not found." }, { status: 404 });
+  }
+
+  let userVote: 0 | 1 | -1 = 0;
+  if (authUser) {
+    const like = await prisma.videoLike.findUnique({
+      where: { userId_videoId: { userId: authUser.id, videoId: id } },
+      select: { value: true },
+    });
+    if (like?.value === 1 || like?.value === -1) {
+      userVote = like.value;
+    }
+  }
+
+  const isOwner = authUser != null && video.channel.ownerId === authUser.id;
+
+  return NextResponse.json({
+    id: video.id,
+    title: video.title,
+    description: video.description,
+    sourceUrl: video.sourceUrl,
+    qualityVariantsJson: video.qualityVariantsJson,
+    transcodePending: video.transcodePending,
+    thumbnail: video.thumbnail,
+    durationSec: video.durationSec,
+    views: video.views,
+    likes: video.likes,
+    dislikes: video.dislikes,
+    category: video.category,
+    rating: video.rating,
+    createdAt: video.createdAt.toISOString(),
+    channel: {
+      slug: video.channel.slug,
+      name: video.channel.name,
+      avatarUrl: video.channel.avatarUrl,
+      followers: video.channel.followers,
+    },
+    userVote,
+    isOwner,
+  });
+}
+
 async function loadOwnedVideo(id: string, userId: string) {
   const video = await prisma.video.findUnique({
     where: { id },
@@ -63,12 +121,12 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const authUser = await getAuthUser(req);
+  if (!authUser) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
   const { id } = await params;
-  const result = await loadOwnedVideo(id, session.user.id);
+  const result = await loadOwnedVideo(id, authUser.id);
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
@@ -214,15 +272,15 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const authUser = await getAuthUser(req);
+  if (!authUser) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
   const { id } = await params;
-  const result = await loadOwnedVideo(id, session.user.id);
+  const result = await loadOwnedVideo(id, authUser.id);
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }

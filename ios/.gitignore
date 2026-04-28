@@ -1,0 +1,24 @@
+# Xcode build output
+build/
+DerivedData/
+
+# Generated Xcode project (regenerate with `xcodegen`)
+*.xcodeproj
+*.xcworkspace
+
+# User-specific Xcode state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.resolved
+
+# CocoaPods (in case we add it later)
+Pods/
+
+# macOS
+.DS_Store

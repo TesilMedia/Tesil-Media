@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/lib/auth";
+import { getAuthUser } from "@/lib/mobileAuth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -58,8 +58,8 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const authUser = await getAuthUser(req);
+  if (!authUser) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
   const { id } = await params;
@@ -85,7 +85,7 @@ export async function PATCH(
   if (!existing) {
     return NextResponse.json({ error: "Comment not found." }, { status: 404 });
   }
-  if (existing.userId !== session.user.id) {
+  if (existing.userId !== authUser.id) {
     return NextResponse.json(
       { error: "You can only edit your own comments." },
       { status: 403 },
@@ -102,11 +102,11 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const authUser = await getAuthUser(req);
+  if (!authUser) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
   const { id } = await params;
@@ -118,7 +118,7 @@ export async function DELETE(
   if (!comment) {
     return NextResponse.json({ error: "Comment not found." }, { status: 404 });
   }
-  if (comment.userId !== session.user.id) {
+  if (comment.userId !== authUser.id) {
     return NextResponse.json(
       { error: "You can only delete your own comments." },
       { status: 403 },

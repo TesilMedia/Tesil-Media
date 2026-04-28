@@ -8,7 +8,7 @@ import { mkdir, stat, unlink } from "node:fs/promises";
 
 import Busboy from "@fastify/busboy";
 
-import { auth } from "@/lib/auth";
+import { getAuthUser } from "@/lib/mobileAuth";
 import { ensureChannelForUser } from "@/lib/slug";
 
 export const runtime = "nodejs";
@@ -156,12 +156,12 @@ async function parseChannelImage(
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const authUser = await getAuthUser(req);
+  if (!authUser) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
-  const channel = await ensureChannelForUser(session.user.id);
+  const channel = await ensureChannelForUser(authUser.id);
   if (!channel) {
     return NextResponse.json(
       { error: "Your session is no longer valid. Please sign in again." },

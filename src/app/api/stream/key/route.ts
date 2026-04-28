@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 
-import { auth } from "@/lib/auth";
+import { getAuthUser } from "@/lib/mobileAuth";
 import { prisma } from "@/lib/prisma";
 import { ensureChannelForUser } from "@/lib/slug";
 
@@ -25,13 +25,13 @@ async function ensureLiveStream(channelId: string, channelSlug: string, channelN
   });
 }
 
-export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
+export async function GET(req: Request) {
+  const authUser = await getAuthUser(req);
+  if (!authUser) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
-  const channel = await ensureChannelForUser(session.user.id);
+  const channel = await ensureChannelForUser(authUser.id);
   if (!channel) {
     return NextResponse.json(
       { error: "Your session is no longer valid. Please sign in again." },
@@ -64,13 +64,13 @@ export async function GET() {
   });
 }
 
-export async function POST() {
-  const session = await auth();
-  if (!session?.user?.id) {
+export async function POST(req: Request) {
+  const authUser = await getAuthUser(req);
+  if (!authUser) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
-  const channel = await ensureChannelForUser(session.user.id);
+  const channel = await ensureChannelForUser(authUser.id);
   if (!channel) {
     return NextResponse.json(
       { error: "Your session is no longer valid. Please sign in again." },

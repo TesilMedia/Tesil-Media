@@ -1,0 +1,54 @@
+# XcodeGen spec for the Tesil Media iOS app.
+#
+# Regenerate the Xcode project on a Mac with:
+#   brew install xcodegen
+#   cd ios && xcodegen generate
+#
+# The resulting TesilMedia.xcodeproj is gitignored — `project.yml` is the
+# source of truth so file additions don't churn a binary plist.
+
+name: TesilMedia
+options:
+  bundleIdPrefix: com.tesilmedia
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: ""
+    SWIFT_STRICT_CONCURRENCY: minimal
+
+targets:
+  TesilMedia:
+    type: application
+    platform: iOS
+    sources:
+      - path: TesilMedia
+    info:
+      path: TesilMedia/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Tesil Media
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen:
+          UIColorName: ""
+          UIImageName: ""
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Allow plain HTTP to localhost during dev. Tighten before TestFlight.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tesilmedia.app
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ENABLE_USER_SCRIPT_SANDBOXING: NO

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { auth } from "@/lib/auth";
+import { getAuthUser } from "@/lib/mobileAuth";
 import { prisma } from "@/lib/prisma";
 import {
   addChatClient,
@@ -96,8 +96,8 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const authUser = await getAuthUser(req);
+  if (!authUser) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
@@ -114,7 +114,7 @@ export async function POST(
     return NextResponse.json({ error: "Stream is not live." }, { status: 400 });
   }
 
-  if (isRateLimited(session.user.id)) {
+  if (isRateLimited(authUser.id)) {
     return NextResponse.json(
       { error: "Sending too fast. Wait a moment." },
       { status: 429 },
@@ -140,7 +140,7 @@ export async function POST(
     data: {
       body,
       streamId: channel.stream.id,
-      userId: session.user.id,
+      userId: authUser.id,
     },
     select: {
       id: true,

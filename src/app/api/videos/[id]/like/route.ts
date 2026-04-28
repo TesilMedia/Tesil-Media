@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/lib/auth";
+import { getAuthUser } from "@/lib/mobileAuth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -15,8 +15,8 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const authUser = await getAuthUser(req);
+  if (!authUser) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
@@ -38,7 +38,7 @@ export async function POST(
   }
 
   const { value } = parsed.data;
-  const userId = session.user.id;
+  const userId = authUser.id;
 
   const video = await prisma.video.findUnique({ where: { id: videoId } });
   if (!video) {

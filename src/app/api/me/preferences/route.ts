@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/lib/auth";
+import { getAuthUser } from "@/lib/mobileAuth";
 import { prisma } from "@/lib/prisma";
 import {
   CONTENT_RATINGS,
@@ -20,8 +20,8 @@ const bodySchema = z.object({
 });
 
 export async function PATCH(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const authUser = await getAuthUser(req);
+  if (!authUser) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
@@ -43,7 +43,7 @@ export async function PATCH(req: Request) {
   const serialised = serializeHiddenRatings(parsed.data.hiddenRatings);
 
   const updated = await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: authUser.id },
     data: { hiddenRatings: serialised },
     select: { hiddenRatings: true },
   });

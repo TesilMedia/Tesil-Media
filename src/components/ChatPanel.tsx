@@ -12,6 +12,7 @@ interface ChatMessage {
 interface Props {
   slug: string;
   currentUserId: string | null;
+  onClose?: () => void;
 }
 
 function formatTime(iso: string): string {
@@ -19,7 +20,7 @@ function formatTime(iso: string): string {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-export function ChatPanel({ slug, currentUserId }: Props) {
+export function ChatPanel({ slug, currentUserId, onClose }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -98,9 +99,20 @@ export function ChatPanel({ slug, currentUserId }: Props) {
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-surface">
-      <div className="shrink-0 border-b border-border px-4 py-3">
+    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] backdrop-blur-sm">
+      <div className="shrink-0 border-b border-border px-4 py-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold">Live Chat</h2>
+        {onClose && (
+          <button
+            onClick={onClose}
+            aria-label="Close chat"
+            className="text-muted hover:text-text"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* flex-col-reverse: first DOM child = visual bottom, so newest message renders at the bottom
@@ -115,18 +127,22 @@ export function ChatPanel({ slug, currentUserId }: Props) {
             No messages yet. Say hello!
           </p>
         )}
-        {[...messages].reverse().map((msg) => (
-          <div key={msg.id} className="flex items-baseline gap-1.5 text-sm leading-snug">
-            <span className="shrink-0 text-[10px] text-muted">
-              {formatTime(msg.createdAt)}
-            </span>
-            <span className="min-w-0 break-words">
-              <span className="font-semibold text-accent">
+        {[...messages].reverse().map((msg, reverseIdx) => (
+          <div
+            key={msg.id}
+            className={`text-sm leading-snug px-2 py-1 ${
+              (messages.length - 1 - reverseIdx) % 2 === 0 ? "bg-surface-2/40" : ""
+            }`}
+          >
+            <div className="flex items-baseline gap-1.5">
+              <span className="shrink-0 text-[10px] text-muted">
+                {formatTime(msg.createdAt)}
+              </span>
+              <span className="min-w-0 truncate font-semibold text-accent">
                 {msg.user.name ?? "Anonymous"}
               </span>
-              <span className="mx-1 text-muted">:</span>
-              <span className="text-text">{msg.body}</span>
-            </span>
+            </div>
+            <p className="break-words text-text">{msg.body}</p>
           </div>
         ))}
       </div>

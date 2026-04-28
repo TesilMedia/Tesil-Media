@@ -8,18 +8,28 @@ import {
 } from "@/lib/ratings";
 
 /**
- * Returns the list of ratings the current viewer does NOT want to see.
+ * Returns the list of ratings the given viewer does NOT want to see.
  *
- * - Guests get the platform defaults (X hidden).
+ * - Guests / unknown users get the platform defaults (X hidden).
  * - Signed-in users get their saved preference (which may be empty if they
  *   have explicitly opted-in to X).
+ *
+ * If `userId` is omitted, the current NextAuth cookie session is consulted —
+ * keeps the existing server-rendered pages working without changes. Mobile
+ * routes should pass the userId resolved from `getAuthUser(req)` instead.
  */
-export async function getViewerHiddenRatings(): Promise<ContentRating[]> {
-  const session = await auth();
-  if (!session?.user?.id) return [...DEFAULT_HIDDEN_RATINGS];
+export async function getViewerHiddenRatings(
+  userId?: string | null,
+): Promise<ContentRating[]> {
+  let resolvedId = userId ?? null;
+  if (resolvedId === null && userId === undefined) {
+    const session = await auth();
+    resolvedId = session?.user?.id ?? null;
+  }
+  if (!resolvedId) return [...DEFAULT_HIDDEN_RATINGS];
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: resolvedId },
     select: { hiddenRatings: true },
   });
   if (!user) return [...DEFAULT_HIDDEN_RATINGS];

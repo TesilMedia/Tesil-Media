@@ -3,7 +3,7 @@ import path from "node:path";
 import { readdir, unlink } from "node:fs/promises";
 import { z } from "zod";
 
-import { auth } from "@/lib/auth";
+import { getAuthUser } from "@/lib/mobileAuth";
 import { prisma } from "@/lib/prisma";
 import { ensureChannelForUser } from "@/lib/slug";
 
@@ -99,8 +99,8 @@ async function cleanupOrphanChannelKindFiles(
 }
 
 export async function PATCH(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const authUser = await getAuthUser(req);
+  if (!authUser) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
@@ -119,7 +119,7 @@ export async function PATCH(req: Request) {
     );
   }
 
-  const channel = await ensureChannelForUser(session.user.id);
+  const channel = await ensureChannelForUser(authUser.id);
   if (!channel) {
     return NextResponse.json(
       { error: "Your session is no longer valid. Please sign in again." },
