@@ -8,11 +8,12 @@ import Foundation
 ///   - On a 401 from an authed call, attempt one refresh + retry before
 ///     surfacing the error to the caller.
 ///   - Decode JSON via `JSONDecoder.api` (tolerates fractional-second dates).
+@Observable
 @MainActor
 final class APIClient {
     let baseURL: URL
-    private let session: URLSession
-    private weak var authStore: AuthStore?
+    @ObservationIgnored private let session: URLSession
+    @ObservationIgnored private weak var authStore: AuthStore?
 
     init(baseURL: URL? = nil, session: URLSession = .shared) {
         self.baseURL = baseURL ?? APIClient.resolvedBaseURL()

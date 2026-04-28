@@ -16,7 +16,7 @@ struct AuthUser: Codable, Identifiable, Equatable {
 }
 
 /// Lightweight channel reference embedded in user / video payloads.
-struct ChannelSummary: Codable, Equatable {
+struct ChannelSummary: Codable, Equatable, Hashable {
     let slug: String
     let name: String
     var avatarUrl: String?

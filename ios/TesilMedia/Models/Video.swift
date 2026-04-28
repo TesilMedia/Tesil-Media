@@ -43,12 +43,9 @@ struct VideoDetail: Decodable, Identifiable, Equatable {
     let isOwner: Bool
 }
 
-struct ChannelDetail: Decodable, Equatable {
+struct ChannelDetail: Decodable, Equatable, Hashable {
     let slug: String
     let name: String
     let avatarUrl: String?
     let followers: Int
 }
-
-extension ChannelSummary: Hashable {}
-extension ChannelDetail: Hashable {}
