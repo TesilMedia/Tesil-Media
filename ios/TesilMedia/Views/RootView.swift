@@ -30,6 +30,13 @@ struct MainTabView: View {
             }
 
             NavigationStack {
+                LiveListView()
+            }
+            .tabItem {
+                Label("Live", systemImage: "antenna.radiowaves.left.and.right")
+            }
+
+            NavigationStack {
                 ProfilePlaceholderView()
             }
             .tabItem {
