@@ -1,0 +1,4 @@
+# MediaMTX binary lives here after running `npm run setup:mediamtx`.
+# Don't commit the binary itself.
+*
+!.gitignore

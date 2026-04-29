@@ -19,6 +19,8 @@ type VideoPlayerProps = {
   hideTimeGroup?: boolean;
 };
 
+const PLAYER_ASSET_VERSION = "llhls-chrome-status-20260428";
+
 /**
  * Embeds the Tesil Video Player via an iframe pointing at the bundled
  * copy in `/public/video-player/embed.html`. Because the player itself
@@ -52,10 +54,10 @@ export function VideoPlayer({
       : "";
   const base =
     startedAtIso != null
-      ? `/video-player/embed.html?src=${encodeURIComponent(src)}&startedAt=${encodeURIComponent(
+      ? `/video-player/embed.html?v=${PLAYER_ASSET_VERSION}&src=${encodeURIComponent(src)}&startedAt=${encodeURIComponent(
           startedAtIso,
         )}${vidQ}`
-      : `/video-player/embed.html?src=${encodeURIComponent(src)}${vidQ}`;
+      : `/video-player/embed.html?v=${PLAYER_ASSET_VERSION}&src=${encodeURIComponent(src)}${vidQ}`;
   const extraParams = [disableSeek ? "disableSeek=1" : "", hideLivePill ? "hideLivePill=1" : "", hideTimeGroup ? "hideTimeGroup=1" : ""].filter(Boolean).join("&");
   const iframeSrc = `${base}&autoplay=1${extraParams ? `&${extraParams}` : ""}`;
   return (

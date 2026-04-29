@@ -2,43 +2,35 @@ import { execFileSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
   appendFileSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
+import http from "node:http";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import NodeMediaServer from "node-media-server";
-
 const APP_NAME = "live";
 const RTMP_PORT = Number(process.env.RTMP_PORT ?? 1935);
-const HTTP_PORT = Number(process.env.HLS_HTTP_PORT ?? 8000);
+const HLS_HTTP_PORT = Number(process.env.HLS_HTTP_PORT ?? 8888);
+const MEDIAMTX_HOOK_PORT = Number(process.env.MEDIAMTX_HOOK_PORT ?? 9100);
 const NEXT_APP_URL = process.env.NEXT_APP_URL ?? "http://localhost:3000";
 const STREAM_HOOK_SECRET = process.env.STREAM_HOOK_SECRET ?? "";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MEDIA_ROOT = path.join(REPO_ROOT, "media");
-const HLS_ROOT = path.join(MEDIA_ROOT, APP_NAME);
 const VOD_ROOT = path.join(MEDIA_ROOT, "vod");
 const VIDEO_UPLOAD_DIR = path.join(REPO_ROOT, "public", "uploads", "videos");
+const MEDIAMTX_CONFIG = path.join(REPO_ROOT, "mediamtx.yml");
+const MEDIAMTX_BIN_DIR = path.join(REPO_ROOT, "bin", "mediamtx");
 
-/** Active `ffmpeg` subprocesses transcoding RTMP → HLS, keyed by stream slug. */
+/** Active ffmpeg VOD-subscriber processes keyed by stream slug. */
 const transcoders = new Map();
 
-/**
- * NMS fires `prePublish` and `postPublish` back-to-back in the same synchronous
- * call (see broadcast_server.postPublish). We record successful auths in
- * prePublish so that postPublish only spawns ffmpeg for authorized streams.
- */
-const authorizedStreams = new Set();
-
-/**
- * Tracks VOD HLS output state per active stream slug.
- * Consumed in `donePublish` to locate segments for remux.
- */
+/** Per-slug VOD output state captured at publish-start. */
 const vodState = new Map();
 
 function ensureFfmpegOnPath() {
@@ -46,93 +38,23 @@ function ensureFfmpegOnPath() {
     execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });
   } catch {
     throw new Error(
-      "FFmpeg is required for OBS ingest. Install it and ensure `ffmpeg` is on PATH.",
+      "FFmpeg is required for VOD recording. Install it and ensure `ffmpeg` is on PATH.",
     );
   }
 }
 
-/** node-media-server parses `streamName?key=…` into streamQuery (see rtmp.js onPublish). */
-function keyFromStreamQuery(query) {
-  if (!query || typeof query !== "object") return "";
-  const k = query.key;
-  if (Array.isArray(k)) return String(k[0] ?? "");
-  return k != null ? String(k) : "";
-}
-
-/**
- * session.streamPath is `/app/name` (no query). Query params live on session.streamQuery.
- * If someone embedded `?key=` in the name segment only, we parse that too.
- */
-function parseSlugFromPath(streamPath) {
-  if (!streamPath || typeof streamPath !== "string") return null;
-  const parts = streamPath.split("/").filter(Boolean);
-  if (parts.length !== 2 || parts[0] !== APP_NAME) return null;
-  const raw = parts[1];
-  const qIndex = raw.indexOf("?");
-  const slug = qIndex === -1 ? raw : raw.slice(0, qIndex);
-  if (!/^[a-z0-9-]{1,80}$/i.test(slug)) return null;
-  const keyFromPath =
-    qIndex === -1
-      ? ""
-      : new URLSearchParams(raw.slice(qIndex + 1)).get("key") ?? "";
-  return { slug, keyFromPath };
-}
-
-function publishAuthFromSession(session) {
-  const parsed = parseSlugFromPath(session?.streamPath);
-  const streamName = parsed?.slug ?? "";
-  const key =
-    keyFromStreamQuery(session?.streamQuery) || parsed?.keyFromPath || "";
-  return { streamName, key };
-}
-
-/** Synchronous POST so the RTMP prePublish handler can reject before the publisher slot is taken (NMS emits sync). */
-function postHookSync(payload) {
-  const url = `${NEXT_APP_URL}/api/stream/hook`;
-  const body = JSON.stringify(payload);
+function findMediaMtxBinary() {
+  const exeName = process.platform === "win32" ? "mediamtx.exe" : "mediamtx";
+  // Prefer a repo-local install so dev environments are self-contained.
+  const local = path.join(MEDIAMTX_BIN_DIR, exeName);
+  if (existsSync(local)) return local;
+  // Fall back to PATH for users who installed via brew/scoop/winget.
   try {
-    execFileSync(
-      "curl",
-      [
-        "-sS",
-        "-f",
-        "-X",
-        "POST",
-        url,
-        "-H",
-        "Content-Type: application/json",
-        "-H",
-        `x-stream-hook-secret: ${STREAM_HOOK_SECRET}`,
-        "-d",
-        body,
-      ],
-      { stdio: ["ignore", "pipe", "pipe"], maxBuffer: 1_000_000 },
-    );
-    return;
-  } catch (e) {
-    if (e.code !== "ENOENT" && e.errno !== "ENOENT") throw e;
+    execFileSync(exeName, ["--version"], { stdio: "ignore" });
+    return exeName;
+  } catch {
+    return null;
   }
-
-  const inline = `
-    const body = ${JSON.stringify(body)};
-    const r = await fetch(${JSON.stringify(url)}, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-stream-hook-secret": ${JSON.stringify(STREAM_HOOK_SECRET)},
-      },
-      body,
-    });
-    if (!r.ok) {
-      console.error(await r.text());
-      process.exit(1);
-    }
-  `;
-  execFileSync(
-    process.execPath,
-    ["--input-type=module", "-e", inline],
-    { stdio: ["ignore", "pipe", "inherit"], maxBuffer: 1_000_000 },
-  );
 }
 
 async function postHookPayloadAsync(payload) {
@@ -178,30 +100,26 @@ function openPreStreamSetupPage(streamName) {
     });
     child.unref();
   } catch (err) {
-    console.warn("[nms] unable to auto-open pre-stream setup page:", err);
+    console.warn("[media] unable to auto-open pre-stream setup page:", err);
   }
 }
 
 /**
- * NMS v4 dropped the FFmpeg/HLS transcoder that shipped with v2/v3, so we spawn
- * `ffmpeg` ourselves and point it at our own RTMP server as a subscriber. The
- * resulting HLS lands under `media/live/<slug>/` which NMS serves via its
- * `static` route on port 8000 (same origin the Next `/hls/*` rewrite targets).
+ * Spawn an ffmpeg subscriber that pulls the live RTMP stream from MediaMTX
+ * (loopback) and writes a VOD HLS ladder to disk. MediaMTX serves live
+ * playback itself; this exists only so we can remux a recording when the
+ * stream ends. Authentication is bypassed for `read` actions in mediamtx.yml,
+ * so this connection does not need credentials.
  */
-function startHlsTranscoder(slug) {
-  stopHlsTranscoder(slug);
-
-  const hlsDir = path.join(HLS_ROOT, slug);
-  mkdirSync(hlsDir, { recursive: true });
+function startVodSubscriber(slug) {
+  stopVodSubscriber(slug);
 
   const vodId = randomBytes(12).toString("hex");
   const vodHlsDir = path.join(VOD_ROOT, slug);
   mkdirSync(vodHlsDir, { recursive: true });
-
   vodState.set(slug, { vodId, vodHlsDir });
 
   const rtmpSubscribeUrl = `rtmp://127.0.0.1:${RTMP_PORT}/${APP_NAME}/${slug}`;
-
   const args = [
     "-hide_banner",
     "-loglevel", "warning",
@@ -210,27 +128,6 @@ function startHlsTranscoder(slug) {
     "-analyzeduration", "0",
     "-rw_timeout", "15000000",
     "-i", rtmpSubscribeUrl,
-    // --- Output 1: Live HLS — sliding 8-segment window, low-latency ---
-    "-c:v", "copy",
-    "-c:a", "aac",
-    "-ar", "44100",
-    "-b:a", "128k",
-    "-f", "hls",
-    // Shorter segments + a tight first segment cut latency down at the cost of
-    // more playlist/segment HTTP traffic. Viewers stay closer to OBS; typical
-    // glass-to-glass with plain HLS is still several seconds behind WebRTC.
-    "-hls_time", "2",
-    // Emit the first segment quickly (may still wait for a keyframe from OBS).
-    "-hls_init_time", "1",
-    "-hls_list_size", "8",
-    // `program_date_time` emits EXT-X-PROGRAM-DATE-TIME on every segment so players
-    // can show a real wall-clock timestamp aligned with OBS instead of relative
-    // seconds into the live window (which drifts per-browser and per-reload).
-    "-hls_flags", "delete_segments+append_list+independent_segments+omit_endlist+program_date_time",
-    "-hls_segment_filename", path.join(hlsDir, "seg_%05d.ts"),
-    "-y",
-    path.join(hlsDir, "index.m3u8"),
-    // --- Output 2: VOD HLS — all segments retained, 4-second cuts ---
     "-c:v", "copy",
     "-c:a", "aac",
     "-ar", "44100",
@@ -248,24 +145,22 @@ function startHlsTranscoder(slug) {
     stdio: ["ignore", "inherit", "inherit"],
     windowsHide: true,
   });
-
   transcoders.set(slug, child);
-  console.log(`[ffmpeg] started HLS transcoder for ${slug} (pid=${child.pid})`);
+  console.log(`[ffmpeg] VOD subscriber started for ${slug} (pid=${child.pid})`);
 
   child.on("exit", (code, signal) => {
     if (transcoders.get(slug) === child) transcoders.delete(slug);
     console.log(
-      `[ffmpeg] exited for ${slug} (code=${code ?? "null"} signal=${signal ?? "null"})`,
+      `[ffmpeg] VOD subscriber exited for ${slug} (code=${code ?? "null"} signal=${signal ?? "null"})`,
     );
   });
-
   child.on("error", (err) => {
-    console.error(`[ffmpeg] failed to spawn for ${slug}:`, err);
+    console.error(`[ffmpeg] VOD subscriber failed to spawn for ${slug}:`, err);
     if (transcoders.get(slug) === child) transcoders.delete(slug);
   });
 }
 
-function stopHlsTranscoder(slug) {
+function stopVodSubscriber(slug) {
   const child = transcoders.get(slug);
   if (!child) return;
   transcoders.delete(slug);
@@ -274,7 +169,7 @@ function stopHlsTranscoder(slug) {
   } catch {
     /* noop */
   }
-  // SIGINT lets ffmpeg flush a final segment and write the end tag; fall back after 3s.
+  // SIGINT lets ffmpeg flush a final segment + write EXT-X-ENDLIST; fall back after 3s.
   setTimeout(() => {
     if (!child.killed) {
       try {
@@ -286,21 +181,18 @@ function stopHlsTranscoder(slug) {
   }, 3000).unref();
 }
 
-function cleanupHlsDir(slug) {
-  const hlsDir = path.join(HLS_ROOT, slug);
-  try {
-    rmSync(hlsDir, { recursive: true, force: true });
-  } catch (err) {
-    console.warn(`[nms] failed to clean HLS dir for ${slug}:`, err);
-  }
-}
-
-/** Wait for a child process to exit, then resolve. Sends SIGKILL after `timeoutMs`. */
 function waitForExit(child, timeoutMs) {
   return new Promise((resolve) => {
-    if (child.exitCode !== null || child.killed) { resolve(); return; }
+    if (child.exitCode !== null || child.killed) {
+      resolve();
+      return;
+    }
     const timer = setTimeout(() => {
-      try { child.kill("SIGKILL"); } catch { /* noop */ }
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        /* noop */
+      }
       resolve();
     }, timeoutMs);
     child.once("exit", () => {
@@ -310,10 +202,6 @@ function waitForExit(child, timeoutMs) {
   });
 }
 
-/**
- * Append EXT-X-ENDLIST to the manifest if absent.
- * ffmpeg writes it on clean SIGINT exit; we add it manually if SIGKILL was used.
- */
 function ensureEndlist(manifestPath) {
   try {
     const content = readFileSync(manifestPath, "utf8");
@@ -325,7 +213,6 @@ function ensureEndlist(manifestPath) {
   }
 }
 
-/** Extract ordered segment filenames from an HLS manifest. Returns absolute paths. */
 function parseHlsSegments(manifestPath, segDir) {
   try {
     const content = readFileSync(manifestPath, "utf8");
@@ -365,13 +252,8 @@ function segmentsFromPublicStart(segments, startedAt) {
     .map((segment) => segment.path);
 }
 
-/**
- * Concat-remux an ordered list of .ts segments to a single faststart MP4.
- * IO-bound (no re-encoding) — typically completes in seconds regardless of duration.
- */
 function remuxVodToMp4(segments, outputPath) {
   const listPath = `${outputPath}.concat.txt`;
-  // Forward slashes are safe on Windows ffmpeg and required on Unix.
   const listContent = segments
     .map((s) => `file '${s.replace(/\\/g, "/").replace(/'/g, "'\\''")}'`)
     .join("\n");
@@ -405,98 +287,70 @@ function remuxVodToMp4(segments, outputPath) {
   });
 }
 
-async function main() {
-  ensureFfmpegOnPath();
-  if (!STREAM_HOOK_SECRET) {
-    throw new Error("STREAM_HOOK_SECRET is required for media server hooks.");
+function parseSlugFromMtxPath(mtxPath) {
+  if (typeof mtxPath !== "string") return null;
+  const match = mtxPath.match(/^live\/([a-z0-9-]{1,80})$/i);
+  return match ? match[1] : null;
+}
+
+function keyFromQueryString(query) {
+  if (!query) return "";
+  try {
+    const sp = new URLSearchParams(query);
+    return sp.get("key") ?? sp.get("pass") ?? sp.get("password") ?? "";
+  } catch {
+    return "";
+  }
+}
+
+async function handleHookEvent(payload) {
+  const slug = parseSlugFromMtxPath(payload?.path);
+  if (!slug) {
+    console.error("[hook] could not parse slug from MTX_PATH:", payload?.path);
+    return;
   }
 
-  mkdirSync(HLS_ROOT, { recursive: true });
-  mkdirSync(VOD_ROOT, { recursive: true });
-  mkdirSync(VIDEO_UPLOAD_DIR, { recursive: true });
-
-  const nms = new NodeMediaServer({
-    rtmp: {
-      port: RTMP_PORT,
-      chunk_size: 60000,
-      gop_cache: false,
-      ping: 30,
-      ping_timeout: 60,
-    },
-    http: {
-      port: HTTP_PORT,
-    },
-    // NMS v4 serves arbitrary static files here — we point `/live` at the HLS
-    // directory so `http://<host>:8000/live/<slug>/index.m3u8` resolves directly.
-    static: {
-      router: "/",
-      root: MEDIA_ROOT,
-    },
-  });
-
-  nms.on("prePublish", (session) => {
-    const { streamName, key } = publishAuthFromSession(session);
-    if (!streamName || !key) {
-      console.error(
-        "[nms] prePublish: missing slug or key path=%s query=%j",
-        session?.streamPath,
-        session?.streamQuery,
-      );
-      session.close();
+  if (payload.event === "ready") {
+    const key = keyFromQueryString(payload.query);
+    if (!key) {
+      // /api/stream/auth has already validated the publish at this point,
+      // so a missing key here would only happen if MediaMTX's auth was
+      // misconfigured. Bail loudly rather than silently accept.
+      console.error(`[hook] ${slug} ready event has no key in query — auth misconfigured`);
       return;
     }
-
     try {
-      postHookSync({ event: "prePublish", streamName, key });
-      authorizedStreams.add(streamName);
-      openPreStreamSetupPage(streamName);
+      await postHookPayloadAsync({ event: "prePublish", streamName: slug, key });
     } catch (err) {
-      console.error("[nms] prePublish hook failed:", err);
-      authorizedStreams.delete(streamName);
-      session.close();
+      console.error(`[hook] prePublish forward failed for ${slug}:`, err);
+      return;
     }
-  });
+    startVodSubscriber(slug);
+    openPreStreamSetupPage(slug);
+    return;
+  }
 
-  nms.on("postPublish", (session) => {
-    const { streamName } = publishAuthFromSession(session);
-    if (!streamName || !authorizedStreams.has(streamName)) return;
-    // The publisher's RTMP socket is already attached by the time this event
-    // fires, so our ffmpeg subscriber can connect immediately and the first
-    // HLS segment is typically written within ~hls_time seconds.
-    startHlsTranscoder(streamName);
-  });
+  if (payload.event === "notReady") {
+    const vod = vodState.get(slug);
+    vodState.delete(slug);
+    const child = transcoders.get(slug);
+    stopVodSubscriber(slug);
 
-  nms.on("donePublish", (session) => {
-    const { streamName, key } = publishAuthFromSession(session);
-    if (!streamName) return;
-
-    const vod = vodState.get(streamName);
-    vodState.delete(streamName);
-    authorizedStreams.delete(streamName);
-
-    const child = transcoders.get(streamName);
-    stopHlsTranscoder(streamName);
-    cleanupHlsDir(streamName);
-
-    // Notify the app immediately so isLive flips without waiting for the remux.
-    // STREAM_HOOK_SECRET already authenticates this call; key is best-effort.
-    void postHookPayloadAsync({ event: "donePublish", streamName, key }).catch(
-      (err) => console.error("[nms] donePublish hook failed:", err),
+    void postHookPayloadAsync({ event: "donePublish", streamName: slug }).catch(
+      (err) => console.error(`[hook] donePublish forward failed for ${slug}:`, err),
     );
 
     if (!vod) return;
 
     void (async () => {
-      // Wait for ffmpeg to flush its final segment before reading the manifest.
       if (child) await waitForExit(child, 5000);
-
       const manifestPath = path.join(vod.vodHlsDir, "index.m3u8");
       ensureEndlist(manifestPath);
       let streamState = null;
       try {
         streamState = await postHookPayloadAsync({
           event: "streamState",
-          streamName,
+          streamName: slug,
         });
       } catch (err) {
         console.error("[remux] failed to load stream state:", err);
@@ -505,42 +359,125 @@ async function main() {
         parseHlsSegments(manifestPath, vod.vodHlsDir),
         streamState?.startedAt ?? null,
       );
-
       if (segments.length === 0) {
-        console.warn(`[remux] no segments for ${streamName} — skipping VOD`);
+        console.warn(`[remux] no segments for ${slug} — skipping VOD`);
         rmSync(vod.vodHlsDir, { recursive: true, force: true });
         return;
       }
-
       const mp4Path = path.join(VIDEO_UPLOAD_DIR, `${vod.vodId}.mp4`);
       try {
         await remuxVodToMp4(segments, mp4Path);
-        await postHookPayloadAsync({ event: "vodReady", streamName, vodId: vod.vodId });
-        console.log(`[remux] VOD ready for ${streamName}: ${mp4Path}`);
+        await postHookPayloadAsync({
+          event: "vodReady",
+          streamName: slug,
+          vodId: vod.vodId,
+        });
+        console.log(`[remux] VOD ready for ${slug}: ${mp4Path}`);
       } catch (err) {
-        console.error(`[remux] failed for ${streamName}:`, err);
+        console.error(`[remux] failed for ${slug}:`, err);
       } finally {
         rmSync(vod.vodHlsDir, { recursive: true, force: true });
       }
     })();
+    return;
+  }
+}
+
+function startHookServer() {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer(async (req, res) => {
+      if (req.method !== "POST" || req.url !== "/hook") {
+        res.writeHead(404).end();
+        return;
+      }
+      let body = "";
+      try {
+        for await (const chunk of req) body += chunk;
+      } catch {
+        res.writeHead(400).end();
+        return;
+      }
+      let payload;
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        res.writeHead(400).end();
+        return;
+      }
+      // Ack first so MediaMTX's runOn* hook returns promptly; then process.
+      res.writeHead(200, { "Content-Type": "application/json" }).end('{"ok":true}');
+      void handleHookEvent(payload);
+    });
+    server.once("error", reject);
+    server.listen(MEDIAMTX_HOOK_PORT, "127.0.0.1", () => resolve(server));
+  });
+}
+
+async function main() {
+  ensureFfmpegOnPath();
+  if (!STREAM_HOOK_SECRET) {
+    throw new Error("STREAM_HOOK_SECRET is required for media server hooks.");
+  }
+
+  const mtxBin = findMediaMtxBinary();
+  if (!mtxBin) {
+    console.error([
+      "MediaMTX binary not found.",
+      "Install it via one of:",
+      "  - npm run setup:mediamtx     (auto-downloads into ./bin/mediamtx/)",
+      "  - manual:                    https://github.com/bluenviron/mediamtx/releases",
+      "                               place `mediamtx` (or `mediamtx.exe`) on PATH.",
+    ].join("\n"));
+    process.exit(1);
+  }
+
+  mkdirSync(VOD_ROOT, { recursive: true });
+  mkdirSync(VIDEO_UPLOAD_DIR, { recursive: true });
+
+  await startHookServer();
+  console.log(`[media] hook server listening on http://127.0.0.1:${MEDIAMTX_HOOK_PORT}/hook`);
+
+  const mtx = spawn(mtxBin, [MEDIAMTX_CONFIG], {
+    cwd: REPO_ROOT,
+    stdio: ["ignore", "inherit", "inherit"],
+    env: {
+      ...process.env,
+      MEDIAMTX_HOOK_PORT: String(MEDIAMTX_HOOK_PORT),
+    },
+    windowsHide: true,
   });
 
+  mtx.on("error", (err) => {
+    console.error("[mediamtx] failed to spawn:", err);
+    process.exit(1);
+  });
+  mtx.on("exit", (code, signal) => {
+    console.error(
+      `[mediamtx] exited (code=${code ?? "null"} signal=${signal ?? "null"})`,
+    );
+    process.exit(code ?? 1);
+  });
+
+  console.log(`[mediamtx] RTMP listening on rtmp://localhost:${RTMP_PORT}/${APP_NAME}`);
+  console.log(
+    `[mediamtx] LL-HLS listening on http://localhost:${HLS_HTTP_PORT}/${APP_NAME}/<slug>/index.m3u8`,
+  );
+
   const shutdown = () => {
-    console.log("[nms] shutting down, stopping transcoders");
-    for (const slug of [...transcoders.keys()]) stopHlsTranscoder(slug);
-    process.exit(0);
+    console.log("[media] shutting down");
+    for (const slug of [...transcoders.keys()]) stopVodSubscriber(slug);
+    try {
+      mtx.kill("SIGINT");
+    } catch {
+      /* noop */
+    }
+    setTimeout(() => process.exit(0), 1500).unref();
   };
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
-
-  nms.run();
-  console.log(`[nms] RTMP listening on rtmp://localhost:${RTMP_PORT}/${APP_NAME}`);
-  console.log(
-    `[nms] HLS output served at http://localhost:${HTTP_PORT}/${APP_NAME}/<slug>/index.m3u8`,
-  );
 }
 
 main().catch((err) => {
-  console.error("[nms] failed to start:", err);
+  console.error("[media] failed to start:", err);
   process.exit(1);
 });

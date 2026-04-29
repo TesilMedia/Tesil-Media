@@ -7,6 +7,7 @@
     "dev": "next dev",
     "dev:media": "node --env-file=.env scripts/media-server.mjs",
     "dev:all": "concurrently -n next,media -c cyan,magenta \"npm:dev\" \"npm:dev:media\"",
+    "setup:mediamtx": "node scripts/setup-mediamtx.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

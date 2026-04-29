@@ -5,12 +5,16 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
+        // MediaMTX serves LL-HLS on port 8888 (see mediamtx.yml).
         source: "/hls/:path*",
-        destination: "http://localhost:8000/live/:path*",
+        destination: "http://localhost:8888/live/:path*",
       },
       {
+        // /hls-vod was an unused alias; kept for design-doc compatibility but
+        // not wired to MediaMTX (which doesn't expose VOD over HLS — VOD lives
+        // in /uploads/videos/ as remuxed MP4).
         source: "/hls-vod/:path*",
-        destination: "http://localhost:8000/vod/:path*",
+        destination: "http://localhost:8888/vod/:path*",
       },
     ];
   },

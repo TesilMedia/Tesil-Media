@@ -58,6 +58,7 @@
   const qualityDropdown = document.getElementById("qualityDropdown");
   const playbackRateNative = document.getElementById("playbackRateNative");
   const qualitySelectNative = document.getElementById("qualitySelectNative");
+  const hlsStatusEl = document.getElementById("hlsStatus");
   if (useNativeDropdowns) {
     if (playbackRateTrigger) {
       playbackRateTrigger.setAttribute("aria-hidden", "true");
@@ -276,20 +277,17 @@
 
   /**
    * Target time for "go live" / initial snap: never rewind vs current playback.
-   * Prefer the right edge of `seekable` (closest to the newest media) over `liveSyncPosition`,
-   * which can sit several seconds behind and caused visible rewinds when already near live.
+   * With hls.js, prefer its live sync point; seeking to the raw seekable edge can
+   * land past the freshest complete part/fragment and stall low-latency HLS.
    */
   function getJumpToLiveTargetTime() {
     if (!isLiveStream()) return null;
     const cur = video.currentTime;
-    const end = getSeekableEndTime();
     const sync = getHlsLiveSyncTime();
-    const edgeSignals = [end, sync].filter(
-      (x) => typeof x === "number" && Number.isFinite(x) && x > 0
-    );
-    if (!edgeSignals.length) return null;
-    const edge = Math.max(...edgeSignals);
-    return Math.max(cur, edge);
+    if (sync != null) return Math.max(cur, sync);
+    const end = getSeekableEndTime();
+    if (end == null) return null;
+    return Math.max(cur, end);
   }
 
   /** Reference "live edge" for UI proximity (seekable end when known, else hls sync). */
@@ -368,6 +366,51 @@
     return isLiveDuration();
   }
 
+  function describeMediaError() {
+    const err = video.error;
+    if (!err) return null;
+    const labels = {
+      1: "aborted",
+      2: "network",
+      3: "decode",
+      4: "unsupported source",
+    };
+    return labels[err.code] || `code ${err.code}`;
+  }
+
+  function setHlsStatus(message) {
+    if (!(hlsStatusEl instanceof HTMLElement)) return;
+    hlsStatusEl.textContent = message;
+    hlsStatusEl.hidden = false;
+    try {
+      console.info("[tesil-player]", message, {
+        currentTime: video.currentTime,
+        muted: video.muted,
+        paused: video.paused,
+        readyState: video.readyState,
+        networkState: video.networkState,
+        mediaError: describeMediaError(),
+      });
+    } catch (_) {
+      /* console can be unavailable in embedded contexts */
+    }
+  }
+
+  function clearHlsStatus() {
+    if (!(hlsStatusEl instanceof HTMLElement)) return;
+    hlsStatusEl.hidden = true;
+    hlsStatusEl.textContent = "";
+  }
+
+  if (hlsStatusEl instanceof HTMLButtonElement) {
+    hlsStatusEl.addEventListener("click", () => {
+      liveUserWantsPlaying = true;
+      requestInitialLiveSeek();
+      seekToLiveEdge();
+      attemptPlayWithAutoplayMuteFallback({ live: true });
+    });
+  }
+
   /**
    * Autoplay policies across browsers are inconsistent: Chrome refuses audible
    * autoplay without a user gesture, Safari is more lenient when the tab is
@@ -383,6 +426,10 @@
   function attemptPlayWithAutoplayMuteFallback(opts) {
     const allowMuteRetry =
       opts && opts.live === true ? true : autoplayMuteFallbackOk();
+    if (opts && opts.live === true && startupAutoplay && !liveHasEverPlayed && !video.muted) {
+      video.muted = true;
+      setMutedUI();
+    }
     const p = video.play();
     if (p && typeof p.catch === "function") {
       p.catch((err) => {
@@ -390,13 +437,23 @@
         // (common on Chrome when hls.js calls startLoad(-1) at the same time).
         // Silently ignore — BUFFER_APPENDED will re-enter tryPlayLiveMedia once
         // the new fragment arrives and retry the play call.
-        if (err && err.name === "AbortError") return;
-        if (!allowMuteRetry) return;
+        if (err && err.name === "AbortError") {
+          setHlsStatus("Live stream is buffering. Click to retry playback.");
+          return;
+        }
+        if (!allowMuteRetry) {
+          setHlsStatus(`Playback blocked: ${err && err.name ? err.name : "unknown"}. Click to start.`);
+          return;
+        }
         if (!video.muted) {
           video.muted = true;
           setMutedUI();
           const r = video.play();
-          if (r && typeof r.catch === "function") r.catch(() => {});
+          if (r && typeof r.catch === "function") {
+            r.catch((retryErr) => {
+              setHlsStatus(`Muted playback blocked: ${retryErr && retryErr.name ? retryErr.name : "unknown"}. Click to start.`);
+            });
+          }
         }
       });
     }
@@ -1681,11 +1738,11 @@
       const instance = new HlsCtor({
         lowLatencyMode: true,
         enableWorker: true,
-        // Stay one segment behind the playlist live edge instead of the default
-        // ~3-segment cushion. `maxLiveSyncPlaybackRate` nudges playback speed
-        // when we fall behind without a hard seek.
-        liveSyncDurationCount: 1,
-        liveMaxLatencyDurationCount: 7,
+        // MediaMTX's mpegts playlist can advertise a large TARGETDURATION while
+        // carrying shorter segments. Use seconds so hls.js does not drift back
+        // several target durations from the live edge.
+        liveSyncDuration: 1.5,
+        liveMaxLatencyDuration: 5,
         maxLiveSyncPlaybackRate: 1.2,
         maxBufferLength: 24,
         backBufferLength: 18,
@@ -1694,10 +1751,15 @@
         fragLoadPolicy: retryPolicy,
       });
       liveHasEverPlayed = false;
-      liveUserWantsPlaying = false;
+      liveUserWantsPlaying = startupAutoplay;
+      if (startupAutoplay && !video.muted) {
+        video.muted = true;
+        setMutedUI();
+      }
       hlsInstance = instance;
       requestInitialLiveSeek();
       instance.on(HlsCtor.Events.MANIFEST_PARSED, () => {
+        setHlsStatus("Live manifest loaded. Starting playback...");
         requestAnimationFrame(() => tryConsumeInitialLiveSeek());
         tryPlayLiveMedia();
         syncPreviewVideoSrc();
@@ -1716,7 +1778,11 @@
         });
       }
       instance.on(HlsCtor.Events.ERROR, (_evt, data) => {
-        if (!data || !data.fatal) return;
+        if (!data) return;
+        setHlsStatus(
+          `HLS ${data.fatal ? "fatal " : ""}${data.type || "error"}: ${data.details || "unknown"}. Click to retry.`,
+        );
+        if (!data.fatal) return;
         if (data.type === HlsCtor.ErrorTypes.NETWORK_ERROR) {
           instance.startLoad();
         } else if (data.type === HlsCtor.ErrorTypes.MEDIA_ERROR) {
@@ -1731,8 +1797,8 @@
           }
         }
       });
-      instance.loadSource(abs);
       instance.attachMedia(video);
+      instance.loadSource(abs);
       video.playbackRate = 1;
       syncPlaybackRateSelect();
       updateTimeDisplay();
@@ -2962,6 +3028,7 @@
   });
 
   video.addEventListener("playing", () => {
+    clearHlsStatus();
     if (isLiveStream()) {
       liveHasEverPlayed = true;
       // Mirror the user's intent: once the stream is actually playing, record
@@ -2996,11 +3063,17 @@
   // gone idle, so BUFFER_APPENDED fires and unblocks playback.
   video.addEventListener("waiting", () => {
     if (!isLiveStream() || !liveUserWantsPlaying) return;
+    setHlsStatus("Chrome is waiting for live media. Click to retry playback.");
     if (hlsInstance) {
       try {
         hlsInstance.startLoad(video.currentTime);
       } catch (_) {}
     }
+  });
+
+  video.addEventListener("error", () => {
+    if (!isLiveStream()) return;
+    setHlsStatus(`Media error: ${describeMediaError() || "unknown"}. Click to retry.`);
   });
 
   video.addEventListener("play", () => {

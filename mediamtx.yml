@@ -1,0 +1,75 @@
+# MediaMTX configuration for Tesil Media. Replaces node-media-server.
+# Provides RTMP ingest from OBS and Low-Latency HLS delivery on a single
+# binary. Glass-to-glass latency lands around 1.5-3s on a healthy LAN, vs
+# 5-10s with the previous classic-HLS pipeline.
+
+logLevel: info
+logDestinations: [stdout]
+
+# Internal HTTP API for runtime control / health checks. Localhost only —
+# never expose this to the public internet.
+api: yes
+apiAddress: 127.0.0.1:9997
+
+# Disable protocols we do not use to keep the surface area small.
+# Note: there is no top-level `rtsps` key in MediaMTX v1.x — RTSPS is
+# controlled via `encryption` inside the RTSP block; disabling RTSP entirely
+# via `rtsp: no` is sufficient.
+rtsp: no
+srt: no
+webrtc: no
+
+# RTMP ingest from OBS. Port 1935 matches the previous NMS setup so existing
+# OBS configurations keep working.
+rtmp: yes
+rtmpAddress: :1935
+rtmpEncryption: 'no'
+
+# HLS. The /hls/* rewrite in next.config.ts proxies viewers here.
+# - hlsVariant: mpegts uses MPEG-TS segments, matching the old FFmpeg pipeline
+#   and avoiding Chrome desktop's fMP4/MSE "unsupported source" failure with
+#   this RTMP ingest.
+# - hlsSegmentDuration is a minimum; final segment length is bounded by OBS's
+#   keyframe interval.
+# - hlsAlwaysRemux: yes ensures HLS is published even when no viewer is
+#   connected (so the first viewer doesn't wait for a keyframe).
+hls: yes
+hlsAddress: :8888
+hlsEncryption: no
+hlsAlwaysRemux: yes
+hlsVariant: mpegts
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+hlsAllowOrigin: '*'
+
+# HTTP authentication. /api/stream/auth validates the streamKey carried in
+# the RTMP URL. Read/playback actions are excluded so HLS viewers don't need
+# credentials, and so the in-process VOD subscriber (ffmpeg → localhost RTMP)
+# can connect without one.
+#
+# NOTE: this URL must match wherever Next.js is serving. MediaMTX does not
+# expand env vars in YAML, so if you run `next dev` on a non-default port
+# (NEXT_APP_URL=...:3004 etc.), update this line to match.
+authMethod: http
+authHTTPAddress: http://localhost:3000/api/stream/auth
+authHTTPExclude:
+  - action: read
+  - action: playback
+  - action: api
+  - action: metrics
+  - action: pprof
+
+# Channel slugs publish under live/<slug>. Anything not matching is rejected
+# (MediaMTX denies unconfigured paths by default).
+#
+# runOn* commands invoke a tiny Node CLI rather than inlining curl. Reasons:
+#   - Cross-platform: $MTX_PATH expansion differs between /bin/sh and cmd.exe;
+#     reading process.env in Node sidesteps that.
+#   - Avoids a curl dependency on Windows (where it isn't always installed).
+# The CLI POSTs to media-server.mjs's local hook server (default port 9100).
+paths:
+  ~^live/[a-z0-9-]{1,80}$:
+    source: publisher
+    runOnReady: node scripts/mediamtx-hook.mjs ready
+    runOnNotReady: node scripts/mediamtx-hook.mjs notReady

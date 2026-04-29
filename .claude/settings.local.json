@@ -4,7 +4,10 @@
       "mcp__Claude_Preview__preview_start",
       "Bash(git checkout *)",
       "Bash(npx tsc *)",
-      "Bash(xxd \"C:/TesilMedia/src/app/me/DeleteVideoButton.tsx\")"
+      "Bash(xxd \"C:/TesilMedia/src/app/me/DeleteVideoButton.tsx\")",
+      "Bash(node --check scripts/media-server.mjs)",
+      "Bash(node --check scripts/mediamtx-hook.mjs)",
+      "Bash(node --check scripts/setup-mediamtx.mjs)"
     ]
   }
 }
