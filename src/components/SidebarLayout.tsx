@@ -83,13 +83,13 @@ export function SidebarLayout({ liveChannels }: Props) {
 
       <aside
         id="main-sidebar"
-        className={`retro-tricolor-divider-r flex min-h-0 w-60 shrink-0 flex-col overflow-y-auto bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] backdrop-blur-sm pl-2 pr-[14px] py-4 transition-transform duration-200 ease-out fixed left-0 top-14 z-40 h-[calc(100dvh-3.5rem)] lg:static lg:top-auto lg:z-auto lg:h-full ${
+        className={`retro-tricolor-divider-r flex min-h-0 w-60 shrink-0 flex-col overflow-hidden bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] backdrop-blur-sm pl-2 pr-[14px] py-4 transition-transform duration-200 ease-out fixed left-0 top-14 z-40 h-[calc(100dvh-3.5rem)] lg:static lg:top-auto lg:z-auto lg:h-full ${
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
         aria-hidden={drawerHidden}
         inert={drawerHidden ? true : undefined}
       >
-        <nav className="flex flex-col px-2">
+        <nav className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto px-2">
           <Link href="/" className={sidebarSectionLinkClass} onClick={close}>
             Home
           </Link>

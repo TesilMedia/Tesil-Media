@@ -7,7 +7,6 @@ import { ChatPanel } from "@/components/ChatPanel";
 import { ChatDrawer } from "@/components/ChatDrawer";
 import { ChatDrawerProvider } from "@/components/ChatDrawerContext";
 import { ChatToggleButton } from "@/components/ChatToggleButton";
-import { LivePlayerToggle } from "@/components/LivePlayerToggle";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { RatingBadge } from "@/components/RatingBadge";
 import { formatViews } from "@/lib/format";
@@ -116,17 +115,18 @@ export default async function LivePage({
 
   return (
     <ChatDrawerProvider>
-      <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-          {/* Left: player + stream info */}
-          <div className="min-w-0 flex-1">
+      <div className="w-full pb-6 pl-2 pr-2 pt-2 lg:pl-2 lg:pr-2 lg:pt-2">
+        <div className="flex flex-col gap-2 lg:grid lg:grid-cols-[minmax(0,4fr)_minmax(0,1fr)] lg:items-stretch lg:gap-2">
+          {/* Top row: keep desktop chat capped to the player height. */}
+          <div className="min-w-0">
             {stream.streamKey ? (
-              <LivePlayerToggle
-                slug={channel.slug}
-                isLive={stream.isLive}
+              <VideoPlayer
+                src={`/hls/${channel.slug}/index.m3u8`}
                 title={stream.title}
-                startedAt={stream.startedAt}
-                vodVideoId={stream.vodVideoId ?? null}
+                liveStartedAt={stream.isLive ? stream.startedAt : null}
+                disableSeek={stream.isLive}
+                hideLivePill={!stream.isLive}
+                hideTimeGroup={!stream.isLive}
               />
             ) : (
               <VideoPlayer
@@ -135,6 +135,34 @@ export default async function LivePage({
                 liveStartedAt={stream.isLive ? stream.startedAt : null}
               />
             )}
+          </div>
+
+          {/* Right: chat panel — desktop only */}
+          <div className="hidden min-h-0 min-w-0 lg:flex lg:self-stretch">
+            <ChatPanel
+              slug={channel.slug}
+              currentUserId={session?.user?.id ?? null}
+            />
+          </div>
+
+          {/* Stream info */}
+          <div className="min-w-0 lg:col-start-1">
+            {stream.streamKey && (stream.isLive || stream.vodVideoId) ? (
+              <div className="flex gap-2">
+                <span className="flex items-center gap-1.5 rounded-full bg-live px-4 py-1.5 text-sm font-medium text-white">
+                  {stream.isLive ? (
+                    <span className="live-pulse inline-block h-1.5 w-1.5 rounded-full bg-white" />
+                  ) : null}
+                  Watch live
+                </span>
+                <Link
+                  href={`/live/${channel.slug}/beginning`}
+                  className="rounded-full border border-border bg-surface px-4 py-1.5 text-sm font-medium text-text transition-colors hover:bg-surface-2"
+                >
+                  Watch from beginning
+                </Link>
+              </div>
+            ) : null}
 
             <div className="mt-4 flex items-start justify-between gap-4 border-b border-border pb-4">
               <div className="min-w-0 flex-1">
@@ -198,14 +226,6 @@ export default async function LivePage({
                 {channel.description}
               </p>
             ) : null}
-          </div>
-
-          {/* Right: chat panel — desktop only */}
-          <div className="hidden shrink-0 lg:sticky lg:top-4 lg:flex lg:h-[calc(100vh-2rem)] lg:w-80 xl:w-96">
-            <ChatPanel
-              slug={channel.slug}
-              currentUserId={session?.user?.id ?? null}
-            />
           </div>
         </div>
 

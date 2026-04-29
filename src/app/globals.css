@@ -358,6 +358,15 @@ h3 {
     letter-spacing: 1px;
   }
 
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   .live-pulse {
     animation: live-pulse 1.6s ease-in-out infinite;
   }

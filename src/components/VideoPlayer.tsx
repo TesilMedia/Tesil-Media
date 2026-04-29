@@ -1,3 +1,5 @@
+import { ViewportFittedPlayerFrame } from "@/components/ViewportFittedPlayerFrame";
+
 type VideoPlayerProps = {
   src: string;
   /** When set, the player loads `/api/videos/{id}/renditions` and shows a quality menu. */
@@ -58,15 +60,16 @@ export function VideoPlayer({
           startedAtIso,
         )}${vidQ}`
       : `/video-player/embed.html?v=${PLAYER_ASSET_VERSION}&src=${encodeURIComponent(src)}${vidQ}`;
-  const extraParams = [disableSeek ? "disableSeek=1" : "", hideLivePill ? "hideLivePill=1" : "", hideTimeGroup ? "hideTimeGroup=1" : ""].filter(Boolean).join("&");
+  const extraParams = [
+    disableSeek ? "disableSeek=1" : "",
+    hideLivePill ? "hideLivePill=1" : "",
+    hideTimeGroup ? "hideTimeGroup=1" : "",
+  ]
+    .filter(Boolean)
+    .join("&");
   const iframeSrc = `${base}&autoplay=1${extraParams ? `&${extraParams}` : ""}`;
   return (
-    <div
-      className={`relative w-full overflow-hidden rounded-lg bg-black shadow-2xl shadow-black/30 ${
-        className ?? ""
-      }`}
-      style={{ aspectRatio: "16 / 9" }}
-    >
+    <ViewportFittedPlayerFrame className={className}>
       <iframe
         title={title ?? "Tesil Video Player"}
         src={iframeSrc}
@@ -76,6 +79,6 @@ export function VideoPlayer({
         referrerPolicy="strict-origin-when-cross-origin"
         loading="eager"
       />
-    </div>
+    </ViewportFittedPlayerFrame>
   );
 }

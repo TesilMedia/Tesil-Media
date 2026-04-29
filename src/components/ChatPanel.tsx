@@ -99,7 +99,7 @@ export function ChatPanel({ slug, currentUserId, onClose }: Props) {
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] backdrop-blur-sm">
+    <div className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-border bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] backdrop-blur-sm">
       <div className="shrink-0 border-b border-border px-4 py-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold">Live Chat</h2>
         {onClose && (
@@ -120,7 +120,7 @@ export function ChatPanel({ slug, currentUserId, onClose }: Props) {
       <div
         ref={listRef}
         onScroll={handleScroll}
-        className="flex min-h-0 flex-1 flex-col-reverse gap-1 overflow-y-auto px-3 py-2"
+        className="no-scrollbar flex min-h-0 flex-1 flex-col-reverse gap-1 overflow-y-auto px-3 py-2"
       >
         {messages.length === 0 && (
           <p className="mb-4 text-center text-xs text-muted">
