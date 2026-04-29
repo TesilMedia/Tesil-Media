@@ -43,6 +43,25 @@ function ensureFfmpegOnPath() {
   }
 }
 
+function hasVideoStream(filePath) {
+  try {
+    const output = execFileSync(
+      "ffprobe",
+      [
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=codec_type",
+        "-of", "csv=p=0",
+        filePath,
+      ],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    );
+    return output.trim() === "video";
+  } catch {
+    return false;
+  }
+}
+
 function findMediaMtxBinary() {
   const exeName = process.platform === "win32" ? "mediamtx.exe" : "mediamtx";
   // Prefer a repo-local install so dev environments are self-contained.
@@ -123,11 +142,13 @@ function startVodSubscriber(slug) {
   const args = [
     "-hide_banner",
     "-loglevel", "warning",
-    "-fflags", "nobuffer+genpts",
-    "-probesize", "32",
-    "-analyzeduration", "0",
+    "-fflags", "+genpts",
+    "-probesize", "10M",
+    "-analyzeduration", "10M",
     "-rw_timeout", "15000000",
     "-i", rtmpSubscribeUrl,
+    "-map", "0:v:0",
+    "-map", "0:a:0?",
     "-c:v", "copy",
     "-c:a", "aac",
     "-ar", "44100",
@@ -367,6 +388,10 @@ async function handleHookEvent(payload) {
       const mp4Path = path.join(VIDEO_UPLOAD_DIR, `${vod.vodId}.mp4`);
       try {
         await remuxVodToMp4(segments, mp4Path);
+        if (!hasVideoStream(mp4Path)) {
+          rmSync(mp4Path, { force: true });
+          throw new Error("remuxed VOD has no video stream");
+        }
         await postHookPayloadAsync({
           event: "vodReady",
           streamName: slug,
