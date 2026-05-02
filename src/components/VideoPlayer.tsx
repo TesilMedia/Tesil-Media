@@ -17,7 +17,7 @@ type VideoPlayerProps = {
   disableSeek?: boolean;
   /** Hides the LIVE pill. Used for pre-stream players where the HLS source is live but the broadcast hasn't started. */
   hideLivePill?: boolean;
-  /** Hides the entire time-group (timestamp + frame-step buttons). Used for pre-stream players. */
+  /** Hides the entire time-group (timestamp + frame-step buttons). Used for pre-stream players where the HLS source is live but the broadcast hasn't started. */
   hideTimeGroup?: boolean;
 };
 

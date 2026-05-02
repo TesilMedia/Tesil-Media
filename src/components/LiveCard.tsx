@@ -12,11 +12,7 @@ import {
 import { formatViews } from "@/lib/format";
 import { titleOverflowClampClass } from "@/lib/titleClamp";
 import { RatingBadge } from "@/components/RatingBadge";
-import {
-  takePreviewLease,
-  releasePreviewLease,
-  useTrueHover,
-} from "@/lib/previewLease";
+import { useTrueHover } from "@/lib/previewLease";
 
 type LiveCardProps = {
   channelSlug: string;
@@ -78,12 +74,10 @@ export function LiveCard(props: LiveCardProps) {
     }
   };
 
-  const previewLeaseReleaseRef = useRef<(() => void) | null>(null);
-  if (!previewLeaseReleaseRef.current) {
-    previewLeaseReleaseRef.current = () => {
-      const self = previewLeaseReleaseRef.current;
-      if (!self) return;
-      releasePreviewLease(self);
+  /** Local teardown only — live previews do not use the global one-at-a-time lease (see VideoCard). */
+  const stopPreviewRef = useRef<(() => void) | null>(null);
+  if (!stopPreviewRef.current) {
+    stopPreviewRef.current = () => {
       cancelPendingHoverDelay();
       setShowPreview(false);
       setPreviewReady(false);
@@ -108,7 +102,7 @@ export function LiveCard(props: LiveCardProps) {
     }
     return () => {
       cancelPendingHoverDelay();
-      previewLeaseReleaseRef.current?.();
+      stopPreviewRef.current?.();
     };
   }, [props.isLive, previewSrc]);
 
@@ -116,7 +110,6 @@ export function LiveCard(props: LiveCardProps) {
     if (!previewSrc) return;
     cancelPendingHoverDelay();
     hoverTimerRef.current = window.setTimeout(() => {
-      takePreviewLease(previewLeaseReleaseRef.current!);
       setShowPreview(true);
     }, HOVER_DELAY_MS);
   };
@@ -124,12 +117,11 @@ export function LiveCard(props: LiveCardProps) {
   const startPreviewImmediately = () => {
     if (!previewSrc) return;
     cancelPendingHoverDelay();
-    takePreviewLease(previewLeaseReleaseRef.current!);
     setShowPreview(true);
   };
 
   const stopPreview = () => {
-    previewLeaseReleaseRef.current?.();
+    stopPreviewRef.current?.();
   };
 
   const tryPlayPreview = () => {
