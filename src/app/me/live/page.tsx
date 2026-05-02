@@ -34,6 +34,7 @@ export default async function LiveSetupPage() {
     select: {
       title: true,
       category: true,
+      category2: true,
       rating: true,
       thumbnail: true,
       ingestActive: true,
@@ -71,6 +72,7 @@ export default async function LiveSetupPage() {
         slug={channel.slug}
         initialTitle={stream.title}
         initialCategory={stream.category}
+        initialCategory2={stream.category2}
         initialRating={stream.rating}
         initialThumbnail={stream.thumbnail}
         initialIngestActive={stream.ingestActive}

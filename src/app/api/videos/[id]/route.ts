@@ -92,6 +92,7 @@ export async function GET(
     likes: video.likes,
     dislikes: video.dislikes,
     category: video.category,
+    category2: video.category2,
     rating: video.rating,
     createdAt: video.createdAt.toISOString(),
     channel: {
@@ -137,6 +138,7 @@ export async function PATCH(
   let title: string | undefined;
   let description: string | null | undefined;
   let category: VideoCategory | undefined;
+  let category2: VideoCategory | null | undefined;
   let rating: ContentRating | undefined;
   let newThumbFile: File | null = null;
   let removeThumb = false;
@@ -162,6 +164,19 @@ export async function PATCH(
         );
       }
       category = raw;
+      const raw2 = String(form.get("category2") ?? "").trim().toLowerCase();
+      if (!raw2) {
+        category2 = null;
+      } else if (!isVideoCategory(raw2)) {
+        return NextResponse.json(
+          { error: "Invalid second category." },
+          { status: 400 },
+        );
+      } else if (raw2 === raw) {
+        category2 = null;
+      } else {
+        category2 = raw2;
+      }
     }
     if (form.has("rating")) {
       const raw = String(form.get("rating") ?? "")
@@ -188,6 +203,7 @@ export async function PATCH(
       title?: string;
       description?: string | null;
       category?: string | null;
+      category2?: string | null;
       rating?: string;
     };
     try {
@@ -202,7 +218,7 @@ export async function PATCH(
           ? body.description.trim()
           : null;
     }
-    if (body.category !== undefined) {
+    if (body.category !== undefined || body.category2 !== undefined) {
       const raw =
         typeof body.category === "string"
           ? body.category.trim().toLowerCase()
@@ -214,6 +230,22 @@ export async function PATCH(
         );
       }
       category = raw;
+      const raw2 =
+        typeof body.category2 === "string"
+          ? body.category2.trim().toLowerCase()
+          : "";
+      if (!raw2) {
+        category2 = null;
+      } else if (!isVideoCategory(raw2)) {
+        return NextResponse.json(
+          { error: "Invalid second category." },
+          { status: 400 },
+        );
+      } else if (raw2 === raw) {
+        category2 = null;
+      } else {
+        category2 = raw2;
+      }
     }
     if (body.rating !== undefined) {
       const raw = String(body.rating).trim().toUpperCase();
@@ -263,6 +295,7 @@ export async function PATCH(
         ? { description: description?.slice(0, 5000) ?? null }
         : {}),
       ...(category !== undefined ? { category } : {}),
+      ...(category2 !== undefined ? { category2 } : {}),
       ...(rating !== undefined ? { rating } : {}),
       ...(thumbnailUpdate !== undefined ? { thumbnail: thumbnailUpdate } : {}),
     },

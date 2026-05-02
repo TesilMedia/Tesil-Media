@@ -16,6 +16,8 @@
 
 import { NextResponse } from "next/server";
 
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/mobileAuth";
 import { isVideoCategory } from "@/lib/categories";
@@ -50,15 +52,19 @@ export async function GET(req: Request) {
     ? []
     : await getViewerHiddenRatings(authUser?.id ?? null);
 
-  const where: Record<string, unknown> = {
-    ...ratingFilterWhere(hidden),
-  };
+  const ratingClause = ratingFilterWhere(hidden) as Prisma.VideoWhereInput;
+  const parts: Prisma.VideoWhereInput[] = [];
+  if (Object.keys(ratingClause).length > 0) {
+    parts.push(ratingClause);
+  }
 
   if (categoryRaw) {
     if (!isVideoCategory(categoryRaw)) {
       return NextResponse.json({ error: "Invalid category." }, { status: 400 });
     }
-    where.category = categoryRaw;
+    parts.push({
+      OR: [{ category: categoryRaw }, { category2: categoryRaw }],
+    });
   }
 
   if (channelSlug) {
@@ -69,15 +75,20 @@ export async function GET(req: Request) {
     if (!channel) {
       return NextResponse.json({ videos: [], nextCursor: null });
     }
-    where.channelId = channel.id;
+    parts.push({ channelId: channel.id });
   }
 
   if (q) {
-    where.OR = [
-      { title: { contains: q } },
-      { description: { contains: q } },
-    ];
+    parts.push({
+      OR: [
+        { title: { contains: q } },
+        { description: { contains: q } },
+      ],
+    });
   }
+
+  const where: Prisma.VideoWhereInput =
+    parts.length === 0 ? {} : parts.length === 1 ? parts[0]! : { AND: parts };
 
   const rows = await prisma.video.findMany({
     where,
@@ -103,6 +114,7 @@ export async function GET(req: Request) {
       likes: v.likes,
       dislikes: v.dislikes,
       category: v.category,
+      category2: v.category2,
       rating: v.rating,
       sourceUrl: v.sourceUrl,
       createdAt: v.createdAt.toISOString(),

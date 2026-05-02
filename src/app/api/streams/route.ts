@@ -44,7 +44,11 @@ export async function GET(req: Request) {
   const where: Record<string, unknown> = {
     ...ratingFilterWhere(hidden),
     ...(liveOnly ? { isLive: true } : {}),
-    ...(categoryRaw ? { category: categoryRaw } : {}),
+    ...(categoryRaw
+      ? {
+          OR: [{ category: categoryRaw }, { category2: categoryRaw }],
+        }
+      : {}),
   };
 
   const rows = await prisma.liveStream.findMany({
@@ -72,6 +76,7 @@ export async function GET(req: Request) {
       isLive: s.isLive,
       ingestActive: s.ingestActive,
       category: s.category,
+      category2: s.category2,
       rating: s.rating,
       streamUrl: s.streamUrl,
       startedAt: s.startedAt?.toISOString() ?? null,

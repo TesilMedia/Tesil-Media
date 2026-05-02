@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { CategoryPicker } from "@/components/CategoryPicker";
 import { LivePlayerToggle } from "@/components/LivePlayerToggle";
-import { VideoCategory } from "@/lib/categories";
+import { VideoCategory, categoriesFromDb } from "@/lib/categories";
 import {
   CONTENT_RATINGS,
   ContentRating,
@@ -17,6 +17,7 @@ import {
 type StreamState = {
   title: string;
   category: string | null;
+  category2: string | null;
   rating: string;
   thumbnail: string | null;
   ingestActive: boolean;
@@ -35,6 +36,7 @@ type Props = {
   slug: string;
   initialTitle: string;
   initialCategory: string | null;
+  initialCategory2: string | null;
   initialRating: string;
   initialThumbnail: string | null;
   initialIngestActive: boolean;
@@ -54,6 +56,7 @@ export function PreStreamSetupForm({
   slug,
   initialTitle,
   initialCategory,
+  initialCategory2,
   initialRating,
   initialThumbnail,
   initialIngestActive,
@@ -62,8 +65,8 @@ export function PreStreamSetupForm({
 }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState(initialTitle);
-  const [category, setCategory] = useState<VideoCategory | null>(
-    (initialCategory as VideoCategory | null) ?? null,
+  const [categories, setCategories] = useState<VideoCategory[]>(() =>
+    categoriesFromDb(initialCategory, initialCategory2),
   );
   const [rating, setRating] = useState<ContentRating>(
     normalizeRating(initialRating),
@@ -111,8 +114,8 @@ export function PreStreamSetupForm({
       setError("Title is required.");
       return;
     }
-    if (!category) {
-      setError("Please choose a category.");
+    if (categories.length === 0) {
+      setError("Please choose at least one category.");
       return;
     }
 
@@ -120,7 +123,8 @@ export function PreStreamSetupForm({
     try {
       const formData = new FormData();
       formData.set("title", trimmedTitle);
-      formData.set("category", category);
+      formData.set("category", categories[0] ?? "");
+      formData.set("category2", categories[1] ?? "");
       formData.set("rating", rating);
       if (thumbnailFile) {
         formData.set("thumbnail", thumbnailFile);
@@ -140,7 +144,9 @@ export function PreStreamSetupForm({
       }
 
       setTitle(data.stream.title);
-      setCategory((data.stream.category as VideoCategory | null) ?? null);
+      setCategories(
+        categoriesFromDb(data.stream.category, data.stream.category2),
+      );
       setRating(normalizeRating(data.stream.rating));
       setThumbnail(data.stream.thumbnail ?? null);
       setThumbnailFile(null);
@@ -251,8 +257,8 @@ export function PreStreamSetupForm({
           </label>
 
           <CategoryPicker
-            value={category}
-            onChange={setCategory}
+            value={categories}
+            onChange={setCategories}
             disabled={saving || publishing}
             required
           />

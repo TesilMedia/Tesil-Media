@@ -71,6 +71,7 @@ export async function GET(req: Request) {
       id: stream.id,
       title: stream.title,
       category: stream.category,
+      category2: stream.category2,
       rating: stream.rating,
       thumbnail: stream.thumbnail,
       ingestActive: stream.ingestActive,
@@ -105,6 +106,7 @@ export async function PATCH(req: Request) {
 
   let title: string | undefined;
   let category: VideoCategory | null | undefined;
+  let category2: VideoCategory | null | undefined;
   let rating: ContentRating | undefined;
   let removeThumbnail = false;
   let newThumbnail: File | null = null;
@@ -116,10 +118,21 @@ export async function PATCH(req: Request) {
     const raw = String(form.get("category") ?? "").trim().toLowerCase();
     if (!raw) {
       category = null;
+      category2 = null;
     } else if (!isVideoCategory(raw)) {
       return NextResponse.json({ error: "Invalid category." }, { status: 400 });
     } else {
       category = raw;
+      const raw2 = String(form.get("category2") ?? "").trim().toLowerCase();
+      if (!raw2) {
+        category2 = null;
+      } else if (!isVideoCategory(raw2)) {
+        return NextResponse.json({ error: "Invalid second category." }, { status: 400 });
+      } else if (raw2 === raw) {
+        category2 = null;
+      } else {
+        category2 = raw2;
+      }
     }
   }
   if (form.has("rating")) {
@@ -170,6 +183,7 @@ export async function PATCH(req: Request) {
     data: {
       ...(title !== undefined ? { title: title.slice(0, 200) } : {}),
       ...(category !== undefined ? { category } : {}),
+      ...(category2 !== undefined ? { category2 } : {}),
       ...(rating !== undefined ? { rating } : {}),
       ...(thumbnailUpdate !== undefined ? { thumbnail: thumbnailUpdate } : {}),
     },
@@ -177,6 +191,7 @@ export async function PATCH(req: Request) {
       id: true,
       title: true,
       category: true,
+      category2: true,
       rating: true,
       thumbnail: true,
       ingestActive: true,

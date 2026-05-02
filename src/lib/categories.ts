@@ -2,8 +2,9 @@
  * Strict video / live-stream categories.
  *
  * Categories are a fixed, finite set so that they can be searched, linked,
- * and aggregated reliably. `Video.category` and `LiveStream.category` are
- * stored as the slug (e.g. "gaming", "film"), not the display label.
+ * and aggregated reliably. `Video.category` / `Video.category2` and
+ * `LiveStream.category` / `LiveStream.category2` store slugs (e.g. "gaming",
+ * "film"), not display labels. At most two distinct categories per row.
  *
  * This file is the single source of truth: anything that reads or writes
  * a category should go through the helpers here.
@@ -26,6 +27,9 @@ export const VIDEO_CATEGORIES = [
 ] as const;
 
 export type VideoCategory = (typeof VIDEO_CATEGORIES)[number];
+
+/** Maximum categories stored on a video or live stream. */
+export const MAX_VIDEO_CATEGORIES = 2;
 
 export const DEFAULT_VIDEO_CATEGORY: VideoCategory = "other";
 
@@ -105,6 +109,21 @@ export function isVideoCategory(value: unknown): value is VideoCategory {
     typeof value === "string" &&
     (VIDEO_CATEGORIES as readonly string[]).includes(value)
   );
+}
+
+/**
+ * Reads up to two canonical slugs from DB columns (deduped, order preserved).
+ */
+export function categoriesFromDb(
+  primary: string | null | undefined,
+  secondary: string | null | undefined,
+): VideoCategory[] {
+  const a = normaliseCategory(primary);
+  const b = normaliseCategory(secondary);
+  const out: VideoCategory[] = [];
+  if (a) out.push(a);
+  if (b && b !== a) out.push(b);
+  return out.slice(0, MAX_VIDEO_CATEGORIES);
 }
 
 /**

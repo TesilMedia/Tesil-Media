@@ -982,7 +982,8 @@ body.page--embed-host {
   flex-shrink: 0;
   min-width: max-content;
   height: var(--chrome-control-height);
-  padding: 0 0.75rem;
+  /* No horizontal padding: frame buttons span the full width of the pill ends. */
+  padding: 0;
   background: var(--chrome-control-bg);
   border: 1px solid var(--chrome-control-border);
   border-radius: 9999px;
@@ -990,12 +991,12 @@ body.page--embed-host {
 }
 
 .player__time-group .player__time {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 clamp(0.12rem, 0.12cqw + 0.12rem, 0.5rem);
+  padding: 0 clamp(0.08rem, 0.1cqw + 0.08rem, 0.35rem);
   text-align: center;
   font-size: var(--chrome-font-size);
   font-variant-numeric: tabular-nums;

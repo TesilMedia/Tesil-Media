@@ -477,6 +477,17 @@ h3 {
   }
 }
 
+/* Short landscape on wide viewports only: expand bar (h-4) + 8px before content. */
+@media (max-height: 500px) and (orientation: landscape) and (min-width: 1024px) {
+  main {
+    padding-top: calc(1rem + 8px);
+  }
+
+  body:has(#app-top-nav.top-nav-open) main {
+    padding-top: 3.5rem;
+  }
+}
+
 /* -------------------------------------------------------------------------
    Tricolor dividers — hard blue/orange/red bands used to break up sections.
    -b / -r / -t / -l are one-sided dividers implemented with a pseudo-element

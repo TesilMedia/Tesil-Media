@@ -43,7 +43,16 @@ export default async function SearchPage({
             OR: [
               { title: { contains: needle } },
               { description: { contains: needle } },
-              ...(matchedCategory ? [{ category: matchedCategory }] : []),
+              ...(matchedCategory
+                ? [
+                    {
+                      OR: [
+                        { category: matchedCategory },
+                        { category2: matchedCategory },
+                      ],
+                    },
+                  ]
+                : []),
             ],
           },
           ratingWhere,

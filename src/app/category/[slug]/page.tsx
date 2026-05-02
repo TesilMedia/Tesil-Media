@@ -37,13 +37,20 @@ export default async function CategoryPage({
 
   const [live, videos] = await Promise.all([
     prisma.liveStream.findMany({
-      where: { isLive: true, category: slug, ...ratingWhere },
+      where: {
+        isLive: true,
+        ...ratingWhere,
+        OR: [{ category: slug }, { category2: slug }],
+      },
       include: { channel: true },
       orderBy: { viewers: "desc" },
       take: 12,
     }),
     prisma.video.findMany({
-      where: { category: slug, ...ratingWhere },
+      where: {
+        ...ratingWhere,
+        OR: [{ category: slug }, { category2: slug }],
+      },
       include: { channel: true },
       orderBy: { createdAt: "desc" },
       take: 48,

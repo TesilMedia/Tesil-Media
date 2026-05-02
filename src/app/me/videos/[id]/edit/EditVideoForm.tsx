@@ -16,9 +16,8 @@ import {
   isContentRating,
 } from "@/lib/ratings";
 import {
-  DEFAULT_VIDEO_CATEGORY,
   VideoCategory,
-  normaliseCategory,
+  categoriesFromDb,
 } from "@/lib/categories";
 
 type Video = {
@@ -26,6 +25,7 @@ type Video = {
   title: string;
   description: string | null;
   category: string | null;
+  category2: string | null;
   rating: string;
   thumbnail: string | null;
   sourceUrl: string;
@@ -36,8 +36,8 @@ export function EditVideoForm({ video }: { video: Video }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(video.title);
   const [description, setDescription] = useState(video.description ?? "");
-  const [category, setCategory] = useState<VideoCategory>(
-    normaliseCategory(video.category) ?? DEFAULT_VIDEO_CATEGORY,
+  const [categories, setCategories] = useState<VideoCategory[]>(() =>
+    categoriesFromDb(video.category, video.category2),
   );
   const [rating, setRating] = useState<ContentRating>(
     isContentRating(video.rating) ? video.rating : DEFAULT_VIDEO_RATING,
@@ -62,10 +62,17 @@ export function EditVideoForm({ video }: { video: Video }) {
     setOk(false);
     setSaving(true);
 
+    if (categories.length === 0) {
+      setError("Please choose at least one category.");
+      setSaving(false);
+      return;
+    }
+
     const fd = new FormData();
     fd.set("title", title);
     fd.set("description", description);
-    fd.set("category", category);
+    fd.set("category", categories[0] ?? "");
+    fd.set("category2", categories[1] ?? "");
     fd.set("rating", rating);
     const file = fileRef.current?.files?.[0];
     if (file) fd.set("thumbnail", file);
@@ -135,8 +142,8 @@ export function EditVideoForm({ video }: { video: Video }) {
       </label>
 
       <CategoryPicker
-        value={category}
-        onChange={setCategory}
+        value={categories}
+        onChange={setCategories}
         disabled={saving}
         required
       />

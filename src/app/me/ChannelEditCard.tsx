@@ -120,8 +120,8 @@ export function ChannelEditCard({ channel, stats }: Props) {
       </div>
 
       <div className="rounded-b-lg px-4 pb-4">
-        <div className="relative z-10 -mt-8 mb-3 flex items-end gap-3">
-          <div className="relative z-10 h-16 w-16 shrink-0 overflow-hidden rounded-full bg-surface-2 shadow-lg">
+        <div className="relative z-10 mb-3 flex items-end gap-3">
+          <div className="relative z-10 -mt-8 h-16 w-16 shrink-0 overflow-hidden rounded-full bg-surface-2 shadow-lg">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -160,7 +160,7 @@ export function ChannelEditCard({ channel, stats }: Props) {
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm hover:bg-surface"
+              className="w-full rounded-md bg-accent px-3 py-2 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover active:brightness-95"
             >
               Edit channel
             </button>

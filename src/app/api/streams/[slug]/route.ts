@@ -40,6 +40,7 @@ export async function GET(
     isLive: s.isLive,
     ingestActive: s.ingestActive,
     category: s.category,
+    category2: s.category2,
     rating: s.rating,
     streamUrl: s.streamUrl,
     startedAt: s.startedAt?.toISOString() ?? null,

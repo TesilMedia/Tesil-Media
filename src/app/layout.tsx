@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   title: "TESIL — Streaming powered by Tesil Video Player",
   description:
     "TESIL — a Twitch/YouTube-style streaming site for VOD and live streams, powered by the Tesil Video Player.",
-  icons: { icon: "/video-player/icons/favicon.ico" },
+  icons: { icon: "/video-player/icons/favicon.png" },
 };
 
 export default async function RootLayout({

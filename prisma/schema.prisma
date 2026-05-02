@@ -108,6 +108,8 @@ model Video {
   // ("gaming", "music", "tech", ...). Legacy rows may still hold free-form
   // values; those are coerced via `normaliseCategory` on read.
   category    String?
+  // Optional second canonical category (at most two per video).
+  category2   String?
   // Maturity rating: "PG" | "PG13" | "R" | "X". Stored as String for SQLite.
   rating      String   @default("PG")
   createdAt   DateTime @default(now())
@@ -124,6 +126,7 @@ model Video {
   @@index([createdAt])
   @@index([rating])
   @@index([category])
+  @@index([category2])
 }
 
 model VideoLike {
@@ -191,6 +194,8 @@ model LiveStream {
   title       String
   // Canonical category slug (see `src/lib/categories.ts`).
   category    String?
+  // Optional second canonical category (at most two per stream).
+  category2   String?
   thumbnail   String?
   // Stream URL — HLS (.m3u8), a Twitch/YouTube live URL, or a looping MP4 for dev.
   streamUrl   String
@@ -216,6 +221,7 @@ model LiveStream {
   messages LiveMessage[]
 
   @@index([category])
+  @@index([category2])
 }
 
 model LiveMessage {

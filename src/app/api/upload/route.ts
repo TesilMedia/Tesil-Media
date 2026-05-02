@@ -116,6 +116,8 @@ type ParseOk = {
 
   category: VideoCategory;
 
+  category2: VideoCategory | null;
+
   rating: ContentRating;
 
   videoFileName: string;
@@ -192,6 +194,8 @@ async function parseMultipartUpload(
 
   let category: string | null = null;
 
+  const extraCategory = { value: null as string | null };
+
   let ratingField: string | null = null;
 
   let durationSecField: string | null = null;
@@ -237,6 +241,8 @@ async function parseMultipartUpload(
     else if (name === "description") description = v.length ? v : null;
 
     else if (name === "category") category = v.length ? v.toLowerCase() : null;
+
+    else if (name === "category2") extraCategory.value = v.length ? v.toLowerCase() : null;
 
     else if (name === "rating") ratingField = v.toUpperCase();
 
@@ -430,6 +436,22 @@ async function parseMultipartUpload(
 
   const categoryValidated: VideoCategory = category;
 
+  let category2Validated: VideoCategory | null = null;
+  const category2Raw = extraCategory.value;
+  if (category2Raw && category2Raw.length > 0) {
+    if (!isVideoCategory(category2Raw)) {
+      return {
+        ok: false,
+        error: "Invalid second category.",
+      };
+    }
+    if (category2Raw === categoryValidated) {
+      category2Validated = null;
+    } else {
+      category2Validated = category2Raw;
+    }
+  }
+
   if (!videoFileName) {
 
     return {
@@ -532,6 +554,8 @@ async function parseMultipartUpload(
 
     category: categoryValidated,
 
+    category2: category2Validated,
+
     rating,
 
     videoFileName,
@@ -622,6 +646,7 @@ export async function POST(req: Request) {
       title: parsed.title.slice(0, 200),
       description: parsed.description?.slice(0, 5000),
       category: parsed.category,
+      category2: parsed.category2,
       rating: parsed.rating,
       sourceUrl: publicVideoUrl,
       thumbnail: publicThumbUrl,

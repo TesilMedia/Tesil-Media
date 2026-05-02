@@ -61,8 +61,8 @@ export default async function ProfilePage() {
   const hiddenRatings = parseHiddenRatings(userPrefs?.hiddenRatings);
 
   return (
-    <div className="w-full max-w-[1400px] py-8">
-      <header className="retro-tricolor-divider-b retro-tricolor-divider-caps mb-6 flex flex-wrap items-end justify-between gap-3 pb-4">
+    <div className="mx-auto w-full max-w-[1024px] pb-8 pt-4">
+      <header className="mb-4 flex flex-wrap items-end justify-between gap-3 pb-2">
         <div>
           <h1 className="text-2xl font-semibold">Your channel</h1>
           <p className="text-sm text-muted">
@@ -96,8 +96,8 @@ export default async function ProfilePage() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-        <section className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
+        <section className="flex flex-col gap-4">
           <ChannelEditCard
             channel={{
               slug: channel.slug,
@@ -119,7 +119,7 @@ export default async function ProfilePage() {
         </section>
 
         <section className="min-w-0">
-          <div className="mb-3 flex items-baseline justify-between">
+          <div className="mb-2 flex items-baseline justify-between">
             <h2 className="text-lg font-semibold">Your videos</h2>
             <span className="text-sm text-muted">
               {videos.length} total · {formatViews(totalViews)} views
@@ -197,7 +197,7 @@ export default async function ProfilePage() {
                   <div className="flex shrink-0 items-center gap-2">
                     <Link
                       href={`/me/videos/${v.id}/edit`}
-                      className="rounded-full border border-border bg-surface-2 px-3 py-1.5 text-xs hover:bg-surface"
+                      className="rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent transition-colors hover:bg-accent-hover active:brightness-95"
                     >
                       Edit
                     </Link>

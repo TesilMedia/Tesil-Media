@@ -9,7 +9,7 @@ import { Comments, type CommentDTO } from "@/components/Comments";
 import { VideoLikeBar } from "@/components/LikeDislike";
 import { formatViews } from "@/lib/format";
 import { RATING_META, isContentRating } from "@/lib/ratings";
-import { normaliseCategory } from "@/lib/categories";
+import { categoriesFromDb } from "@/lib/categories";
 import {
   getViewerHiddenRatings,
   ratingFilterWhere,
@@ -103,7 +103,7 @@ export default async function WatchPage({
     .catch(() => {});
 
   const ratingWhere = ratingFilterWhere(hidden);
-  const relatedCategory = normaliseCategory(video.category);
+  const relatedSlugs = categoriesFromDb(video.category, video.category2);
   const viewerId = session?.user?.id ?? null;
 
   const [related, commentRows, videoLike, viewerCommentLikes] = await Promise.all([
@@ -114,7 +114,16 @@ export default async function WatchPage({
             id: { not: video.id },
             OR: [
               { channelId: video.channelId },
-              ...(relatedCategory ? [{ category: relatedCategory }] : []),
+              ...(relatedSlugs.length > 0
+                ? [
+                    {
+                      OR: relatedSlugs.flatMap((slug) => [
+                        { category: slug },
+                        { category2: slug },
+                      ]),
+                    },
+                  ]
+                : []),
             ],
           },
           ratingWhere,

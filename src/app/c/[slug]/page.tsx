@@ -46,20 +46,22 @@ export default async function ChannelPage({
   const hiddenByFilter = totalVideos - channel.videos.length;
 
   return (
-    <div className="w-full max-w-[1600px]">
-      <div className="relative z-0 aspect-[6/1] w-full overflow-hidden bg-surface">
-        {channel.bannerUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={channel.bannerUrl}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        ) : null}
+    <>
+      <div className="-mx-4 w-[calc(100%+2rem)] shrink-0">
+        <div className="relative z-0 aspect-[6/1] w-full overflow-hidden bg-surface">
+          {channel.bannerUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={channel.bannerUrl}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : null}
+        </div>
       </div>
 
-      <div>
-        <div className="grid grid-cols-[auto_1fr_auto] items-start gap-x-3 gap-y-2 pt-6 sm:gap-x-6 sm:gap-y-2 lg:pt-8">
+      <div className="w-full min-w-0">
+        <div className="grid grid-cols-[auto_1fr_auto] items-start gap-x-3 gap-y-2 pt-4 sm:gap-x-6 sm:gap-y-2">
           <div
             className={`h-24 w-24 shrink-0 overflow-hidden rounded-full border-4 border-bg bg-surface-2 shadow-md ${
               channel.description ? "row-span-2" : ""
@@ -154,6 +156,6 @@ export default async function ChannelPage({
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }

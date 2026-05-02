@@ -33,7 +33,7 @@ export function UploadForm() {
   const [videoSize, setVideoSize] = useState<number>(0);
   const [thumbName, setThumbName] = useState<string | null>(null);
   const [rating, setRating] = useState<ContentRating>(DEFAULT_VIDEO_RATING);
-  const [category, setCategory] = useState<VideoCategory | null>(null);
+  const [categories, setCategories] = useState<VideoCategory[]>([]);
   const [progress, setProgress] = useState<number>(0);
   const [encodeProgress, setEncodeProgress] = useState<number>(0);
   const [encodeDone, setEncodeDone] = useState<number>(0);
@@ -82,7 +82,7 @@ export function UploadForm() {
     setVideoSize(0);
     setThumbName(null);
     setRating(DEFAULT_VIDEO_RATING);
-    setCategory(null);
+    setCategories([]);
     assignThumbnailInput(null);
     formRef.current?.reset();
   }
@@ -114,8 +114,8 @@ export function UploadForm() {
       setError("Please choose a video file.");
       return;
     }
-    if (!category) {
-      setError("Please choose a category.");
+    if (categories.length === 0) {
+      setError("Please choose at least one category.");
       return;
     }
 
@@ -236,179 +236,210 @@ export function UploadForm() {
         </div>
       ) : null}
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="text-muted">Title *</span>
-        <input
-          name="title"
-          type="text"
-          required
-          maxLength={200}
-          disabled={uploading}
-          placeholder="My awesome video"
-          className="rounded-md border border-border bg-surface px-3 py-2 outline-none focus:border-accent/60 disabled:opacity-60"
-        />
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="text-muted">Description</span>
-        <textarea
-          name="description"
-          rows={4}
-          maxLength={5000}
-          disabled={uploading}
-          placeholder="What's this video about?"
-          className="resize-y rounded-md border border-border bg-surface px-3 py-2 outline-none focus:border-accent/60 disabled:opacity-60"
-        />
-      </label>
-
-      <CategoryPicker
-        value={category}
-        onChange={setCategory}
-        disabled={uploading}
-        required
-      />
-
-      <fieldset className="flex flex-col gap-2 text-sm" disabled={uploading}>
-        <legend className="text-muted">Content rating *</legend>
-        <input type="hidden" name="rating" value={rating} />
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {CONTENT_RATINGS.map((r) => {
-            const meta = RATING_META[r];
-            const selected = rating === r;
-            return (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRating(r)}
-                aria-pressed={selected}
-                className={`flex flex-col items-start gap-1 rounded-md border px-3 py-2 text-left transition ${
-                  selected
-                    ? "border-accent/70 bg-surface-2"
-                    : "border-border bg-surface hover:border-accent/50 hover:bg-surface-2"
-                } disabled:opacity-60`}
-              >
-                <span
-                  className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 font-display text-[11px] uppercase tracking-wider ${meta.badgeClass}`}
-                >
-                  {meta.label}
-                </span>
-                <span className="text-xs text-muted">{meta.description}</span>
-              </button>
-            );
-          })}
-        </div>
-        <p className="text-xs text-muted">
-          Viewers can hide videos by rating in their profile. X is hidden by
-          default.
-        </p>
-      </fieldset>
-
-      <div className="flex flex-col gap-1 text-sm">
-        <span className="text-muted">Video file *</span>
-        <label
-          className={`flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed px-3 py-6 text-sm transition ${
-            uploading
-              ? "border-border bg-surface opacity-60"
-              : "border-border bg-surface hover:border-accent/60 hover:bg-surface-2"
-          }`}
-        >
-          <span className="min-w-0 flex-1">
-            {videoName ? (
-              <>
-                <span className="block truncate font-medium text-text">
-                  {videoName}
-                </span>
-                <span className="text-xs text-muted">
-                  {formatBytes(videoSize)}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="block font-medium text-text">
-                  Click to choose a video
-                </span>
-                <span className="text-xs text-muted">
-                  mp4, webm, mkv, mov, m4v, ogv, ogg
-                </span>
-              </>
-            )}
-          </span>
-          <span className="shrink-0 rounded-full bg-surface-2 px-3 py-1 text-xs text-muted">
-            Browse
-          </span>
-          <input
-            name="video"
-            type="file"
-            accept="video/mp4,video/webm,video/x-matroska,video/quicktime,video/ogg,.mkv,.mov,.m4v,.ogv"
-            required
-            disabled={uploading}
-            className="hidden"
-            onChange={(e) => {
-              const f = e.currentTarget.files?.[0] ?? null;
-              setVideoFile(f);
-              setDurationSec(null);
-              setVideoName(f?.name ?? null);
-              setVideoSize(f?.size ?? 0);
-              assignThumbnailInput(null);
-              setThumbName(null);
-            }}
-          />
-        </label>
-      </div>
-
-      {videoFile ? (
-        <ThumbnailFramePicker
-          videoFile={videoFile}
-          disabled={uploading}
-          onDurationSec={setDurationSec}
-          onFrameChosen={(file) => {
-            assignThumbnailInput(file);
-            setThumbName(file.name);
-          }}
-        />
-      ) : null}
-
-      <div className="flex flex-col gap-1 text-sm">
-        <span className="text-muted">Thumbnail (optional)</span>
-        <label
-          className={`flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed px-3 py-4 text-sm transition ${
-            uploading
-              ? "border-border bg-surface opacity-60"
-              : "border-border bg-surface hover:border-accent/60 hover:bg-surface-2"
-          }`}
-        >
-          <span className="min-w-0 flex-1">
-            {thumbName ? (
-              <span className="block truncate font-medium text-text">
-                {thumbName}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Media: video + thumbnails */}
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="text-muted">Video file *</span>
+            <label
+              className={`flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed px-3 py-4 text-sm transition ${
+                uploading
+                  ? "border-border bg-surface opacity-60"
+                  : "border-border bg-surface hover:border-accent/60 hover:bg-surface-2"
+              }`}
+            >
+              <span className="min-w-0 flex-1">
+                {videoName ? (
+                  <>
+                    <span className="block truncate font-medium text-text">
+                      {videoName}
+                    </span>
+                    <span className="text-xs text-muted">
+                      {formatBytes(videoSize)}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="block font-medium text-text">
+                      Click to choose a video
+                    </span>
+                    <span className="text-xs text-muted">
+                      mp4, webm, mkv, mov, m4v, ogv, ogg
+                    </span>
+                  </>
+                )}
               </span>
-            ) : (
-              <>
-                <span className="block font-medium text-text">
-                  Click to choose an image
-                </span>
-                <span className="text-xs text-muted">
-                  jpg, png, webp, gif
-                </span>
-              </>
-            )}
-          </span>
-          <span className="shrink-0 rounded-full bg-surface-2 px-3 py-1 text-xs text-muted">
-            Browse
-          </span>
-          <input
-            ref={thumbInputRef}
-            name="thumbnail"
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
+              <span className="shrink-0 rounded-full bg-surface-2 px-3 py-1 text-xs text-muted">
+                Browse
+              </span>
+              <input
+                name="video"
+                type="file"
+                accept="video/mp4,video/webm,video/x-matroska,video/quicktime,video/ogg,.mkv,.mov,.m4v,.ogv"
+                required
+                disabled={uploading}
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.currentTarget.files?.[0] ?? null;
+                  setVideoFile(f);
+                  setDurationSec(null);
+                  setVideoName(f?.name ?? null);
+                  setVideoSize(f?.size ?? 0);
+                  assignThumbnailInput(null);
+                  setThumbName(null);
+                }}
+              />
+            </label>
+          </div>
+
+          {videoFile ? (
+            <ThumbnailFramePicker
+              videoFile={videoFile}
+              disabled={uploading}
+              onDurationSec={setDurationSec}
+              onFrameChosen={(file) => {
+                assignThumbnailInput(file);
+                setThumbName(file.name);
+              }}
+            />
+          ) : null}
+
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="text-muted">Thumbnail (optional)</span>
+            <label
+              className={`flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed px-3 py-4 text-sm transition ${
+                uploading
+                  ? "border-border bg-surface opacity-60"
+                  : "border-border bg-surface hover:border-accent/60 hover:bg-surface-2"
+              }`}
+            >
+              <span className="min-w-0 flex-1">
+                {thumbName ? (
+                  <span className="block truncate font-medium text-text">
+                    {thumbName}
+                  </span>
+                ) : (
+                  <>
+                    <span className="block font-medium text-text">
+                      Click to choose an image
+                    </span>
+                    <span className="text-xs text-muted">
+                      jpg, png, webp, gif
+                    </span>
+                  </>
+                )}
+              </span>
+              <span className="shrink-0 rounded-full bg-surface-2 px-3 py-1 text-xs text-muted">
+                Browse
+              </span>
+              <input
+                ref={thumbInputRef}
+                name="thumbnail"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                disabled={uploading}
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.currentTarget.files?.[0] ?? null;
+                  setThumbName(f?.name ?? null);
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Settings */}
+        <div className="flex h-full min-w-0 flex-col gap-4">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-muted">Title *</span>
+            <input
+              name="title"
+              type="text"
+              required
+              maxLength={200}
+              disabled={uploading}
+              placeholder="My awesome video"
+              className="rounded-md border border-border bg-surface px-3 py-2 outline-none focus:border-accent/60 disabled:opacity-60"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-muted">Description</span>
+            <textarea
+              name="description"
+              rows={4}
+              maxLength={5000}
+              disabled={uploading}
+              placeholder="What's this video about?"
+              className="resize-y rounded-md border border-border bg-surface px-3 py-2 outline-none focus:border-accent/60 disabled:opacity-60"
+            />
+          </label>
+
+          <CategoryPicker
+            value={categories}
+            onChange={setCategories}
             disabled={uploading}
-            className="hidden"
-            onChange={(e) => {
-              const f = e.currentTarget.files?.[0] ?? null;
-              setThumbName(f?.name ?? null);
-            }}
+            required
           />
-        </label>
+
+          <fieldset className="flex flex-col gap-2 text-sm" disabled={uploading}>
+            <legend className="text-muted">Content rating *</legend>
+            <input type="hidden" name="rating" value={rating} />
+            <div className="grid grid-cols-2 gap-2">
+              {CONTENT_RATINGS.map((r) => {
+                const meta = RATING_META[r];
+                const selected = rating === r;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setRating(r)}
+                    aria-pressed={selected}
+                    className={`flex flex-col items-start gap-1 rounded-md border px-3 py-2 text-left transition ${
+                      selected
+                        ? "border-accent/70 bg-surface-2"
+                        : "border-border bg-surface hover:border-accent/50 hover:bg-surface-2"
+                    } disabled:opacity-60`}
+                  >
+                    <span
+                      className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 font-display text-[11px] uppercase tracking-wider ${meta.badgeClass}`}
+                    >
+                      {meta.label}
+                    </span>
+                    <span className="text-xs text-muted">{meta.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted">
+              Viewers can hide videos by rating in their profile. X is hidden by
+              default.
+            </p>
+          </fieldset>
+
+          <div className="mt-auto flex flex-wrap items-center gap-3 pt-2">
+            <button
+              type="submit"
+              disabled={uploading}
+              className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-60"
+            >
+              {uploading
+                ? status === "encoding"
+                  ? "Publishing…"
+                  : "Uploading…"
+                : "Upload"}
+            </button>
+            {!uploading && (videoName || thumbName) ? (
+              <button
+                type="button"
+                onClick={reset}
+                className="rounded-md border border-border bg-surface px-4 py-2 text-sm hover:bg-surface-2"
+              >
+                Reset
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       {uploading ? (
@@ -448,29 +479,6 @@ export function UploadForm() {
           </div>
         </div>
       ) : null}
-
-      <div className="mt-2 flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={uploading}
-          className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-60"
-        >
-          {uploading
-            ? status === "encoding"
-              ? "Publishing…"
-              : "Uploading…"
-            : "Upload"}
-        </button>
-        {!uploading && (videoName || thumbName) ? (
-          <button
-            type="button"
-            onClick={reset}
-            className="rounded-md border border-border bg-surface px-4 py-2 text-sm hover:bg-surface-2"
-          >
-            Reset
-          </button>
-        ) : null}
-      </div>
     </form>
   );
 }

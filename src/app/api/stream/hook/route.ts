@@ -124,6 +124,7 @@ export async function POST(req: Request) {
       select: {
         title: true,
         category: true,
+        category2: true,
         rating: true,
         thumbnail: true,
         channelId: true,
@@ -149,6 +150,7 @@ export async function POST(req: Request) {
         id: randomUUID(),
         title: liveStream.title,
         category: liveStream.category ?? null,
+        category2: liveStream.category2 ?? null,
         rating: liveStream.rating,
         thumbnail,
         sourceUrl: `/uploads/videos/${parsed.data.vodId}.mp4`,

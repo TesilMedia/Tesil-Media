@@ -834,17 +834,6 @@
     );
   }
 
-  /**
-   * Coarse-pointer (typical phones): first tap on the video area only arms;
-   * the next valid tap toggles play/pause. Reset when using explicit controls
-   * or a new load.
-   */
-  let coarseViewportPlayPauseArmed = false;
-
-  video.addEventListener("loadstart", () => {
-    webAudioVolumeSetupFailed = false;
-    coarseViewportPlayPauseArmed = false;
-  });
 
   /** At 1× zoom, movement past this before pointerup cancels tap-to-play (scroll starting on the player). */
   const VIEWPORT_TAP_CANCEL_MOVE_PX = usesCoarsePrimaryPointer ? 30 : 12;
@@ -3088,6 +3077,10 @@
     setHlsStatus(`Media error: ${describeMediaError() || "unknown"}. Click to retry.`);
   });
 
+  video.addEventListener("loadstart", () => {
+    webAudioVolumeSetupFailed = false;
+  });
+
   video.addEventListener("play", () => {
     setState(true);
     lastMediaTime = null;
@@ -3149,7 +3142,6 @@
   }
 
   playPause.addEventListener("click", () => {
-    coarseViewportPlayPauseArmed = false;
     togglePlay();
   });
 
@@ -3189,6 +3181,25 @@
     e.preventDefault();
   }
 
+  /** True when the HUD is fully hidden (matches idle CSS: idle + no HUD focus). */
+  function hudWasFullyHiddenAtPointerDown() {
+    if (player.dataset.scrubbing === "true") return false;
+    if (!player.classList.contains("player--idle")) return false;
+    try {
+      if (player.matches(":has(.player__hud:focus-within)")) return false;
+    } catch (_) {
+      const hud = player.querySelector(".player__hud");
+      if (
+        hud instanceof HTMLElement &&
+        document.activeElement instanceof Node &&
+        hud.contains(document.activeElement)
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   videoViewport.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     if (isExternalEmbedSource()) return;
@@ -3210,6 +3221,8 @@
       return;
     }
 
+    const chromeWasHiddenAtDown = hudWasFullyHiddenAtPointerDown();
+
     player.focus({ preventScroll: true });
     if (zoomLevel > 1.001) {
       e.preventDefault();
@@ -3223,6 +3236,8 @@
       dragged: false,
       tapCancelled: false,
       downT: performance.now(),
+      /** Snapshot before this gesture reveals chrome (bubble `bumpChromeActivity` on `#player`). */
+      chromeWasHidden: chromeWasHiddenAtDown,
     };
     if (zoomLevel > 1.001) {
       try {
@@ -3294,6 +3309,7 @@
     const dragged = panPointer.dragged;
     const tapCancelled = panPointer.tapCancelled || endedByCancel;
     const holdMs = performance.now() - (panPointer.downT ?? performance.now());
+    const chromeWasHidden = panPointer.chromeWasHidden;
     panPointer = null;
     try {
       if (videoViewport.hasPointerCapture(e.pointerId)) {
@@ -3306,10 +3322,13 @@
     const tapQuickEnough = holdMs <= VIEWPORT_TAP_MAX_DURATION_MS;
     if (!dragged && zoomLevel <= 1.001 && !tapCancelled && tapQuickEnough) {
       if (usesCoarsePrimaryPointer) {
-        if (!coarseViewportPlayPauseArmed) {
-          coarseViewportPlayPauseArmed = true;
+        /**
+         * HUD fully hidden: tap only wakes chrome (pointer path); do not pause while playing.
+         * HUD already visible: one tap toggles play/pause (no double-tap).
+         */
+        if (chromeWasHidden) {
+          if (video.paused) togglePlay();
         } else {
-          coarseViewportPlayPauseArmed = false;
           togglePlay();
         }
       } else {
@@ -3388,7 +3407,6 @@
   /** Mobile: tap outside #player hides chrome immediately (idle timer is too slow). */
   function dismissChromeForOutsideTap() {
     if (!usesCoarsePrimaryPointer) return;
-    coarseViewportPlayPauseArmed = false;
     clearChromeIdleTimer();
     player.classList.add("player--idle");
     player.classList.add("player--pointer-outside");
@@ -4023,7 +4041,6 @@
     switch (e.key) {
       case " ":
         e.preventDefault();
-        coarseViewportPlayPauseArmed = false;
         togglePlay();
         break;
       case "ArrowLeft":
