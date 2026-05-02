@@ -12,11 +12,10 @@ import {
 import { ViewportFittedPlayerFrame } from "@/components/ViewportFittedPlayerFrame";
 
 /**
- * `LivePlayer` is a React-native low-latency HLS player tuned for the MediaMTX
- * fMP4 LL-HLS pipeline (see mediamtx.yml: `hlsVariant: fmp4`,
- * `hlsPartDuration: 200ms`). It targets sub-3s glass-to-glass latency in
- * Chrome / Edge / Firefox via hls.js (1.6+) and falls back to native HLS in
- * Safari / iOS where the OS-level player already implements LL-HLS.
+ * `LivePlayer` is tuned for the MediaMTX fMP4 HLS pipeline (see mediamtx.yml:
+ * default `hlsVariant: fmp4` for iOS-safe CMAF segments; optional `lowLatency`
+ * for LL-HLS on LANs with stable OBS keyframes). Chrome / Edge / Firefox use
+ * hls.js (1.6+); Safari / iOS use native HLS.
  *
  * Why a separate component (vs. the iframe `VideoPlayer`):
  *   - The iframe loads the bundled vanilla-JS player which targets VOD +
@@ -67,6 +66,16 @@ const FAR_BEHIND_THRESHOLD_S = 6;
  * a few seconds.
  */
 const OFFLINE_RETRY_INTERVAL_MS = 4000;
+
+/**
+ * Android (and rare non‑iOS mobile browsers that still hit the MSE path) tend
+ * to struggle with LL‑HLS part pacing over cellular — tiny buffers underrun in
+ * a tight loop and the `<video>` can sit in `waiting` forever. Desktop keeps
+ * the low‑latency profile; these UAs get a more forgiving transport config.
+ */
+function prefersMobileLiveReliability(ua: string): boolean {
+  return /Android/i.test(ua);
+}
 
 function formatElapsed(totalSeconds: number) {
   if (!Number.isFinite(totalSeconds) || totalSeconds < 0) totalSeconds = 0;
@@ -149,6 +158,7 @@ export function LivePlayer({
 
     let cancelled = false;
     let hlsInstance: import("hls.js").default | null = null;
+    let detachLiveRecovery = () => {};
 
     /**
      * Pull the freshest LL-HLS edge whenever the player has fallen too far
@@ -175,6 +185,83 @@ export function LivePlayer({
       }
     };
 
+    /**
+     * First paint should match the "Go live" / LIVE control: seek to the end of
+     * the native seekable range. `snapToLiveEdge()` prefers `liveSyncPosition`,
+     * which follows hls.js's safe sync point and can sit ~10s behind; users
+     * only get the tighter edge after clicking live — duplicate that once on load.
+     */
+    let didInitialUserLiveSnap = false;
+    const tryInitialUserLiveSnap = () => {
+      if (cancelled || didInitialUserLiveSnap || !video) return;
+      const seekable = video.seekable;
+      if (seekable.length === 0) return;
+      didInitialUserLiveSnap = true;
+      try {
+        video.currentTime = Math.max(0, seekable.end(seekable.length - 1) - 0.3);
+      } catch {
+        /* ignore — source may still be attaching */
+      }
+    };
+
+    /**
+     * After a tab is backgrounded, timers (including hls.js playlist refresh)
+     * are throttled, so the MSE buffer can trail the true live edge. Seeking
+     * alone only moves within the already-loaded seekable range. Match the
+     * bundled player's "Go live" control: drop the stale load state and
+     * refetch from the freshest fragment, then snap.
+     */
+    const resyncLiveEdge = () => {
+      if (!video || cancelled) return;
+      if (hlsInstance) {
+        try {
+          hlsInstance.stopLoad();
+          hlsInstance.startLoad(-1);
+        } catch {
+          /* ignore — transport may be mid-teardown */
+        }
+      }
+      snapToLiveEdge();
+    };
+
+    /**
+     * iOS uses native HLS (no hls.js), so it never inherited the MSE stall
+     * loop. Android MSE uses hls.js but both benefit from the same nudge when
+     * returning from a backgrounded tab.
+     */
+    const startLiveRecoveryWatch = () => {
+      let stallSince: number | null = null;
+      const stallTimer = window.setInterval(() => {
+        if (cancelled || !video || video.paused) {
+          stallSince = null;
+          return;
+        }
+        const seekable = video.seekable;
+        if (seekable.length === 0) return;
+        const edge = seekable.end(seekable.length - 1);
+        const lag = edge - video.currentTime;
+        if (lag > FAR_BEHIND_THRESHOLD_S) {
+          if (stallSince == null) stallSince = Date.now();
+          else if (Date.now() - stallSince > 500) {
+            resyncLiveEdge();
+            stallSince = null;
+          }
+        } else {
+          stallSince = null;
+        }
+      }, 500);
+      const onVisibility = () => {
+        if (cancelled || document.visibilityState !== "visible") return;
+        resyncLiveEdge();
+        void attemptPlay();
+      };
+      document.addEventListener("visibilitychange", onVisibility);
+      return () => {
+        window.clearInterval(stallTimer);
+        document.removeEventListener("visibilitychange", onVisibility);
+      };
+    };
+
     const attemptPlay = async () => {
       if (cancelled) return;
       try {
@@ -195,24 +282,6 @@ export function LivePlayer({
       }
     };
 
-    const onLoadedMetadata = () => snapToLiveEdge();
-    const onCanPlay = () => {
-      setWaiting(false);
-      void attemptPlay();
-    };
-    const onPlaying = () => {
-      setHasFirstFrame(true);
-      setWaiting(false);
-    };
-    const onWaiting = () => setWaiting(true);
-    const onStalled = () => setWaiting(true);
-
-    video.addEventListener("loadedmetadata", onLoadedMetadata);
-    video.addEventListener("canplay", onCanPlay);
-    video.addEventListener("playing", onPlaying);
-    video.addEventListener("waiting", onWaiting);
-    video.addEventListener("stalled", onStalled);
-
     setError(null);
     setOffline(false);
     setWaiting(true);
@@ -231,10 +300,67 @@ export function LivePlayer({
     const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
     const isIosWebkit = /iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && "ontouchend" in document);
     const useNativeHls = canNativeHls && isIosWebkit;
+    const mobileLiveReliability = prefersMobileLiveReliability(ua);
+
+    const onLoadedMetadata = () => {
+      // Native WebKit already chooses a sane live start; snapping here can
+      // seek ahead of the first decodable buffer on marginal networks.
+      if (!useNativeHls) tryInitialUserLiveSnap();
+    };
+    const onLoadedData = () => {
+      setWaiting(false);
+    };
+    const onCanPlay = () => {
+      setWaiting(false);
+      if (!useNativeHls) tryInitialUserLiveSnap();
+      void attemptPlay();
+    };
+    const onPlaying = () => {
+      if (!useNativeHls) tryInitialUserLiveSnap();
+      setHasFirstFrame(true);
+      setWaiting(false);
+    };
+    const onWaiting = () => setWaiting(true);
+    const onStalled = () => setWaiting(true);
+    /**
+     * Native live HLS (especially iOS) can fire `waiting` on routine segment
+     * boundary work without a follow-up `canplay`. Playback is fine but our
+     * spinner would latch on forever. Any `timeupdate` / `progress` while
+     * actually playing means we're past that micro-stall.
+     */
+    const onProgressOrTimeUpdate = () => {
+      if (cancelled || !video || video.paused || video.seeking) return;
+      setWaiting(false);
+    };
+    const onVideoError = () => {
+      if (cancelled || !video.error) return;
+      if (!useNativeHls) {
+        // hls.js reports fatal issues via Hls.Events.ERROR; the element often
+        // mirrors the same failure and would duplicate our overlay.
+        return;
+      }
+      setWaiting(false);
+      setError({
+        message: "Live playback failed.",
+        detail: describeMediaError(video),
+        hint:
+          "Try refreshing. If this persists on iPhone, the HLS feed may be incompatible — ensure MediaMTX uses `hlsVariant: fmp4` and OBS keyframe interval is 1s.",
+      });
+    };
+
+    video.addEventListener("loadedmetadata", onLoadedMetadata);
+    video.addEventListener("loadeddata", onLoadedData);
+    video.addEventListener("canplay", onCanPlay);
+    video.addEventListener("playing", onPlaying);
+    video.addEventListener("waiting", onWaiting);
+    video.addEventListener("stalled", onStalled);
+    video.addEventListener("timeupdate", onProgressOrTimeUpdate);
+    video.addEventListener("progress", onProgressOrTimeUpdate);
+    video.addEventListener("error", onVideoError);
 
     if (useNativeHls) {
-      // iOS — the OS player implements LL-HLS natively and produces the
-      // lowest latency available on that platform without MSE.
+      // iOS — native HLS (classic fMP4 sliding window or LL-HLS, depending on
+      // MediaMTX `hlsVariant`).
       //
       // Probe before pointing video.src at the manifest so we can show the
       // "offline" placeholder gracefully when MediaMTX returns 404. Without
@@ -244,22 +370,18 @@ export function LivePlayer({
       //
       // We must use GET (not HEAD) here: MediaMTX's HLS handler returns 404
       // for HEAD requests on `index.m3u8` even when the muxer is healthy and
-      // the same URL responds 200 to GET. We discard the body via
-      // signal.abort() once headers are in.
+      // the same URL responds 200 to GET. Read the tiny body to completion —
+      // aborting mid-request has caused Safari to skip assigning `video.src`
+      // (infinite spinner with no MEDIA_ERR surface).
       let nativeOfflineRetry: number | null = null;
 
       const tryLoad = async () => {
         if (cancelled) return;
-        const ctrl = new AbortController();
         try {
           const probe = await fetch(src, {
             method: "GET",
             cache: "no-store",
-            signal: ctrl.signal,
           });
-          // Headers are in — we don't need the body, hand the URL to the
-          // native player and let it stream.
-          ctrl.abort();
           if (cancelled) return;
           if (probe.status === 404) {
             setOffline(true);
@@ -274,14 +396,14 @@ export function LivePlayer({
             });
             return;
           }
+          // Consume body so the connection closes cleanly (m3u8 is small).
+          await probe.text();
+          if (cancelled) return;
           setOffline(false);
           if (video.src !== src) video.src = src;
           void attemptPlay();
         } catch (err) {
-          // AbortError after a successful headers read isn't a failure; it's
-          // how we discard the body. Anything else is a real network problem.
           if (cancelled) return;
-          if ((err as DOMException | undefined)?.name === "AbortError") return;
           setOffline(true);
           setWaiting(false);
           if (process.env.NODE_ENV !== "production") {
@@ -292,15 +414,21 @@ export function LivePlayer({
         }
       };
       void tryLoad();
+      detachLiveRecovery = startLiveRecoveryWatch();
 
       return () => {
         cancelled = true;
+        detachLiveRecovery();
         if (nativeOfflineRetry != null) window.clearTimeout(nativeOfflineRetry);
         video.removeEventListener("loadedmetadata", onLoadedMetadata);
+        video.removeEventListener("loadeddata", onLoadedData);
         video.removeEventListener("canplay", onCanPlay);
         video.removeEventListener("playing", onPlaying);
         video.removeEventListener("waiting", onWaiting);
         video.removeEventListener("stalled", onStalled);
+        video.removeEventListener("timeupdate", onProgressOrTimeUpdate);
+        video.removeEventListener("progress", onProgressOrTimeUpdate);
+        video.removeEventListener("error", onVideoError);
         try {
           video.pause();
           video.removeAttribute("src");
@@ -312,7 +440,6 @@ export function LivePlayer({
     }
 
     // Chrome / Edge / Firefox / macOS Safari via hls.js + MSE.
-    let detachStallWatch = () => {};
     let offlineRetryTimer: number | null = null;
 
     void (async () => {
@@ -330,26 +457,35 @@ export function LivePlayer({
       }
 
       hlsInstance = new Hls({
-        // LL-HLS — hls.js auto-tunes liveSync* off the manifest's
-        // EXT-X-SERVER-CONTROL: PART-HOLD-BACK / HOLD-BACK when this is on.
-        lowLatencyMode: true,
+        // Android / cellular: LL-HLS part chasing keeps the buffer so shallow
+        // that underruns devolve into endless `waiting`. Trade a little latency
+        // for a steadier edge; desktop keeps LL mode + workers.
+        ...(mobileLiveReliability
+          ? {
+              lowLatencyMode: false,
+              enableWorker: false,
+              liveSyncDurationCount: 5,
+              liveMaxLatencyDurationCount: 14,
+              maxLiveSyncPlaybackRate: 1.75,
+              fragLoadingTimeOut: 12000,
+              manifestLoadingTimeOut: 12000,
+              levelLoadingTimeOut: 12000,
+              startFragPrefetch: true,
+              maxBufferHole: 0.25,
+            }
+          : {
+              lowLatencyMode: true,
+              enableWorker: true,
+              fragLoadingTimeOut: 4000,
+              manifestLoadingTimeOut: 4000,
+              levelLoadingTimeOut: 4000,
+            }),
         // Required so seeking back to a known PROGRAM-DATE-TIME works even
         // outside `seekable` — used by snapToLiveEdge after long stalls.
         liveDurationInfinity: true,
-        // Tight back-buffer keeps memory pressure low; with 1s segments and
-        // 200ms parts, 4s of history is plenty for hls.js to recover from
-        // small reorderings without holding the whole rolling window.
-        backBufferLength: 4,
-        // hls.js default is 30s — way too patient for live. We want the
-        // player to give up on a single fragment within 2s and re-request the
-        // freshest part instead of waiting on a dead connection.
-        fragLoadingTimeOut: 4000,
-        manifestLoadingTimeOut: 4000,
-        levelLoadingTimeOut: 4000,
-        // Workers help with the chunked-transfer parsing pipeline; without
-        // this LL-HLS can stall on the main thread when heavy DOM work is
-        // happening (e.g. chat re-renders).
-        enableWorker: true,
+        // Slightly deeper back-buffer on mobile gives the demuxer room when
+        // the network jitters; desktop stays tight for memory.
+        backBufferLength: mobileLiveReliability ? 8 : 4,
         // The previous fMP4-on-Chrome failure usually came down to AAC codec
         // strings: OBS sometimes negotiates HE-AAC v1 which Chrome's MSE
         // rejects ("unsupported source"). Forcing LC-AAC here prevents
@@ -375,7 +511,7 @@ export function LivePlayer({
           offlineRetryTimer = null;
         }
         setOffline(false);
-        snapToLiveEdge();
+        tryInitialUserLiveSnap();
         void attemptPlay();
       });
 
@@ -499,45 +635,27 @@ export function LivePlayer({
       hlsInstance.attachMedia(video);
       hlsInstance.loadSource(src);
 
-      // Background watchdog: if the buffer-head has fallen far behind live for
-      // longer than half a second, snap back. hls.js handles this in most
-      // cases via PART-HOLD-BACK, but tab throttling can defeat the timer.
-      let stallSince: number | null = null;
-      const stallTimer = window.setInterval(() => {
-        if (!hlsInstance || cancelled || video.paused) {
-          stallSince = null;
-          return;
-        }
-        const seekable = video.seekable;
-        if (seekable.length === 0) return;
-        const edge = seekable.end(seekable.length - 1);
-        const lag = edge - video.currentTime;
-        if (lag > FAR_BEHIND_THRESHOLD_S) {
-          if (stallSince == null) stallSince = Date.now();
-          else if (Date.now() - stallSince > 500) {
-            snapToLiveEdge();
-            stallSince = null;
-          }
-        } else {
-          stallSince = null;
-        }
-      }, 500);
-
-      detachStallWatch = () => window.clearInterval(stallTimer);
+      if (!cancelled) {
+        detachLiveRecovery = startLiveRecoveryWatch();
+      }
     })();
 
     return () => {
       cancelled = true;
-      detachStallWatch();
+      detachLiveRecovery();
       if (offlineRetryTimer != null) {
         window.clearTimeout(offlineRetryTimer);
         offlineRetryTimer = null;
       }
       video.removeEventListener("loadedmetadata", onLoadedMetadata);
+      video.removeEventListener("loadeddata", onLoadedData);
       video.removeEventListener("canplay", onCanPlay);
       video.removeEventListener("playing", onPlaying);
       video.removeEventListener("waiting", onWaiting);
       video.removeEventListener("stalled", onStalled);
+      video.removeEventListener("timeupdate", onProgressOrTimeUpdate);
+      video.removeEventListener("progress", onProgressOrTimeUpdate);
+      video.removeEventListener("error", onVideoError);
       if (hlsInstance) {
         try {
           hlsInstance.destroy();

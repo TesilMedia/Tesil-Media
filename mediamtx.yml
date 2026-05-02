@@ -1,7 +1,6 @@
 # MediaMTX configuration for Tesil Media. Replaces node-media-server.
-# Provides RTMP ingest from OBS and Low-Latency HLS delivery on a single
-# binary. Glass-to-glass latency lands around 1.5-3s on a healthy LAN, vs
-# 5-10s with the previous classic-HLS pipeline.
+# Provides RTMP ingest from OBS and HLS delivery on a single binary. Latency
+# is a few segment lengths behind live (see `hlsSegmentDuration` / count).
 
 logLevel: info
 logDestinations: [stdout]
@@ -26,31 +25,33 @@ rtmpAddress: :1935
 rtmpEncryption: 'no'
 
 # HLS. The /hls/* rewrite in next.config.ts proxies viewers here.
-# - hlsVariant: lowLatency emits true LL-HLS (#EXT-X-PART + EXT-X-PRELOAD-HINT
-#   + EXT-X-SERVER-CONTROL). The other two variants (`mpegts` and `fmp4`)
-#   produce only classic-HLS segments — `fmp4` is just CMAF segments without
-#   the LL-HLS spec features and caps you at ~3-5s end-to-end latency
-#   regardless of part duration.
-# - hlsSegmentDuration is a minimum; final segment length is bounded by OBS's
-#   keyframe interval. For best LL-HLS behavior keep OBS keyframe interval
-#   = 1s so that segments don't grow past 1s and parts are flushed promptly.
-#   (At a 2s keyframe interval segments are 2s, which still works but adds a
-#   second of float in the live window.)
-# - hlsPartDuration: target latency floor. ~200ms is the LL-HLS sweet spot:
-#   short enough for sub-2s glass-to-glass on a healthy LAN, long enough that
-#   partial-segment HTTP overhead doesn't dominate.
-# - hlsSegmentCount governs the live window. 7 × 1s = 7s history, which is
-#   what the LL-HLS spec recommends as a minimum so player buffers can absorb
-#   one network hiccup without falling off the rolling window.
+# - hlsVariant: fmp4 — fragmented MP4 (CMAF) sliding-window HLS without LL-HLS
+#   partial segments (#EXT-X-PART). Apple WebKit is strict: if the publisher
+#   GOP/audio cadence makes part durations drift, `lowLatency` triggers
+#   "part duration changed … this will cause an error in iOS clients" and
+#   Safari never leaves the loading state. `fmp4` avoids LL-HLS partial
+#   segments and stays compatible with iPhone / iPad (Android + desktop
+#   hls.js still fine).
+# - hlsVariant: lowLatency — true LL-HLS; only when keyframe / segment pacing
+#   is stable enough that the muxer never logs part-duration drift (iOS is
+#   unforgiving).
+# - hlsSegmentDuration is a *minimum*; the muxer must end each segment on an
+#   IDR frame, so it MUST match your OBS keyframe interval in practice. If you
+#   use 2s for Twitch/YouTube restream compatibility, set this to 2s — leaving
+#   it at 1s while publishing 2s GOP makes segment boundaries fight the
+#   encoder and iOS can barely advance (slideshow / multi‑second freezes).
+# - hlsPartDuration applies to lowLatency only; kept for easy toggling.
+# - hlsSegmentCount × segment length ≈ rolling DVR window; a bit more helps
+#   cellular and iOS recover without falling off the playlist edge.
 # - hlsAlwaysRemux: yes ensures HLS is published even when no viewer is
 #   connected (so the first viewer doesn't wait for a keyframe).
 hls: yes
 hlsAddress: :8888
 hlsEncryption: no
 hlsAlwaysRemux: yes
-hlsVariant: lowLatency
-hlsSegmentCount: 7
-hlsSegmentDuration: 1s
+hlsVariant: fmp4
+hlsSegmentCount: 12
+hlsSegmentDuration: 2s
 hlsPartDuration: 200ms
 hlsAllowOrigin: '*'
 
