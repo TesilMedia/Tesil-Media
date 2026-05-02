@@ -9,6 +9,7 @@ import { ChatDrawerProvider } from "@/components/ChatDrawerContext";
 import { ChatToggleButton } from "@/components/ChatToggleButton";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { RatingBadge } from "@/components/RatingBadge";
+import { WaitingRoomLiveRedirect } from "@/components/WaitingRoomLiveRedirect";
 import { formatViews } from "@/lib/format";
 import { RATING_META, isContentRating } from "@/lib/ratings";
 import { getViewerHiddenRatings } from "@/lib/viewerPrefs";
@@ -80,9 +81,10 @@ export default async function LivePage({
     );
   }
 
-  if (!stream.isLive && stream.ingestActive) {
+  if (!stream.isLive && (stream.ingestActive || stream.waitingRoomOpen)) {
     return (
       <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-4 py-16 text-center">
+        <WaitingRoomLiveRedirect slug={channel.slug} />
         <span className="rounded bg-accent px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-on-accent">
           Starting soon
         </span>
@@ -92,8 +94,8 @@ export default async function LivePage({
           {stream.title}
         </h1>
         <p className="max-w-lg text-sm text-muted">
-          {channel.name} is preparing the stream. Refresh in a moment to join
-          live.
+          {channel.name} is preparing the stream. This page will load the live
+          player automatically when they go live.
         </p>
         <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
           <Link

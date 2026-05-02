@@ -21,6 +21,7 @@ type StreamState = {
   rating: string;
   thumbnail: string | null;
   ingestActive: boolean;
+  waitingRoomOpen: boolean;
   isLive: boolean;
   startedAt: string | null;
 };
@@ -40,6 +41,7 @@ type Props = {
   initialRating: string;
   initialThumbnail: string | null;
   initialIngestActive: boolean;
+  initialWaitingRoomOpen: boolean;
   initialIsLive: boolean;
   initialStartedAt: Date | string | null;
 };
@@ -60,6 +62,7 @@ export function PreStreamSetupForm({
   initialRating,
   initialThumbnail,
   initialIngestActive,
+  initialWaitingRoomOpen,
   initialIsLive,
   initialStartedAt,
 }: Props) {
@@ -75,6 +78,7 @@ export function PreStreamSetupForm({
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [removeThumbnail, setRemoveThumbnail] = useState(false);
   const [ingestActive, setIngestActive] = useState(initialIngestActive);
+  const [waitingRoomOpen, setWaitingRoomOpen] = useState(initialWaitingRoomOpen);
   const [isLive, setIsLive] = useState(initialIsLive);
   const [startedAt, setStartedAt] = useState<string | null>(
     initialStartedAt instanceof Date
@@ -83,6 +87,7 @@ export function PreStreamSetupForm({
   );
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [wrBusy, setWrBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -94,6 +99,7 @@ export function PreStreamSetupForm({
       const data = (await res.json().catch(() => ({}))) as SetupResponse;
       if (!res.ok || !data.stream) return;
       setIngestActive(Boolean(data.stream.ingestActive));
+      setWaitingRoomOpen(Boolean(data.stream.waitingRoomOpen));
       setIsLive(Boolean(data.stream.isLive));
       setStartedAt(data.stream.startedAt ?? null);
       if (!thumbnailFile && !removeThumbnail) {
@@ -101,6 +107,34 @@ export function PreStreamSetupForm({
       }
     } catch {
       // Ignore transient status refresh failures.
+    }
+  }
+
+  async function patchWaitingRoom(open: boolean) {
+    if (isLive) return;
+    setError(null);
+    setSuccess(null);
+    setWrBusy(true);
+    try {
+      const formData = new FormData();
+      formData.set("waitingRoomOpen", open ? "1" : "0");
+      const res = await fetch("/api/stream/setup", {
+        method: "PATCH",
+        body: formData,
+      });
+      const data = (await res.json().catch(() => ({}))) as SetupResponse;
+      if (!res.ok || !data.stream) {
+        setError(
+          data.error ?? `Failed to update waiting room (HTTP ${res.status}).`,
+        );
+        return;
+      }
+      setWaitingRoomOpen(Boolean(data.stream.waitingRoomOpen));
+      router.refresh();
+    } catch {
+      setError("Network error while updating waiting room.");
+    } finally {
+      setWrBusy(false);
     }
   }
 
@@ -152,6 +186,7 @@ export function PreStreamSetupForm({
       setThumbnailFile(null);
       setRemoveThumbnail(false);
       setIngestActive(Boolean(data.stream.ingestActive));
+      setWaitingRoomOpen(Boolean(data.stream.waitingRoomOpen));
       setIsLive(Boolean(data.stream.isLive));
       setStartedAt(data.stream.startedAt ?? null);
       setSuccess("Setup saved.");
@@ -178,6 +213,7 @@ export function PreStreamSetupForm({
         return;
       }
       setIsLive(true);
+      setWaitingRoomOpen(false);
       setStartedAt(data.startedAt ?? new Date().toISOString());
       setSuccess("You are now live.");
       router.push(`/live/${slug}`);
@@ -191,6 +227,17 @@ export function PreStreamSetupForm({
 
   return (
     <div className="flex flex-col gap-6">
+      {error ? (
+        <div className="rounded-md border border-danger-border bg-danger-bg px-3 py-2 text-sm text-danger">
+          {error}
+        </div>
+      ) : null}
+      {success ? (
+        <div className="rounded-md border border-success-border bg-success-bg px-3 py-2 text-sm text-success">
+          {success}
+        </div>
+      ) : null}
+
       <section className="space-y-3">
         <LivePlayerToggle
           slug={slug}
@@ -230,17 +277,36 @@ export function PreStreamSetupForm({
       </section>
 
       <section className="rounded-lg border border-border bg-surface p-4">
-        {error ? (
-          <div className="mb-3 rounded-md border border-danger-border bg-danger-bg px-3 py-2 text-sm text-danger">
-            {error}
-          </div>
-        ) : null}
-        {success ? (
-          <div className="mb-3 rounded-md border border-success-border bg-success-bg px-3 py-2 text-sm text-success">
-            {success}
-          </div>
-        ) : null}
+        <h2 className="text-sm font-semibold text-text">Viewer waiting room</h2>
+        <p className="mt-1 text-xs text-muted">
+          When on, your public live URL shows a &quot;Starting soon&quot; page
+          until you go live. Turn this on before OBS if you want viewers waiting
+          while you finish title, categories, and thumbnail.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={wrBusy || isLive || publishing}
+            onClick={() => void patchWaitingRoom(!waitingRoomOpen)}
+            className="rounded-md border border-border bg-surface-2 px-4 py-2 text-sm font-medium hover:bg-surface disabled:opacity-60"
+          >
+            {wrBusy
+              ? "Updating…"
+              : waitingRoomOpen
+                ? "Waiting room: on"
+                : "Waiting room: off"}
+          </button>
+          <span className="text-xs text-muted">
+            {isLive
+              ? "Ended when you went live."
+              : waitingRoomOpen
+                ? "Visitors see Starting soon."
+                : "Visitors see the normal live page (offline until ingest)."}
+          </span>
+        </div>
+      </section>
 
+      <section className="rounded-lg border border-border bg-surface p-4">
         <form onSubmit={saveSetup} className="flex flex-col gap-4">
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-muted">Title *</span>

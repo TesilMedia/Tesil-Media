@@ -203,6 +203,8 @@ model LiveStream {
   streamKey   String?  @unique
   // True while OBS is connected/publishing to RTMP, even before the stream is publicly live.
   ingestActive Boolean @default(false)
+  // Streamer-enabled: public /live/<slug> shows the waiting room before the broadcast is live.
+  waitingRoomOpen Boolean @default(false)
   isLive      Boolean  @default(false)
   viewers     Int      @default(0)
   // Maturity rating: "PG" | "PG13" | "R" | "X". Stored as String for SQLite.

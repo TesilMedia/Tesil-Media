@@ -91,38 +91,6 @@ async function postHookPayloadAsync(payload) {
   return response.json();
 }
 
-function openPreStreamSetupPage(streamName) {
-  const url = `${NEXT_APP_URL}/me/live?slug=${encodeURIComponent(streamName)}`;
-  try {
-    if (process.platform === "win32") {
-      const child = spawn("cmd", ["/c", "start", "", url], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
-      });
-      child.unref();
-      return;
-    }
-    if (process.platform === "darwin") {
-      const child = spawn("open", [url], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
-      });
-      child.unref();
-      return;
-    }
-    const child = spawn("xdg-open", [url], {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-    });
-    child.unref();
-  } catch (err) {
-    console.warn("[media] unable to auto-open pre-stream setup page:", err);
-  }
-}
-
 /**
  * Spawn an ffmpeg subscriber that pulls the live RTMP stream from MediaMTX
  * (loopback) and writes a VOD HLS ladder to disk. MediaMTX serves live
@@ -347,7 +315,6 @@ async function handleHookEvent(payload) {
       return;
     }
     startVodSubscriber(slug);
-    openPreStreamSetupPage(slug);
     return;
   }
 

@@ -104,7 +104,7 @@ export async function POST(req: Request) {
     if (!stream) return NextResponse.json({ ok: true });
     await prisma.liveStream.update({
       where: { id: stream.id },
-      data: { ingestActive: false, isLive: false },
+      data: { ingestActive: false, isLive: false, waitingRoomOpen: false },
     });
   } else if (parsed.data.event === "streamState") {
     const stream = await prisma.liveStream.findFirst({

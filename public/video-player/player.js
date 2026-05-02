@@ -585,7 +585,14 @@
     clearInitialLiveSeekGuard();
   }
 
+  function syncPlayerLiveChromeMode() {
+    if (player instanceof HTMLElement) {
+      player.classList.toggle("player--live", isLiveStream());
+    }
+  }
+
   function syncLiveButtonUI() {
+    syncPlayerLiveChromeMode();
     if (!(goLiveBtn instanceof HTMLElement)) return;
     if (startupDisableSeek || startupHideLivePill) return;
     const live = isLiveStream();

@@ -75,6 +75,7 @@ export async function GET(req: Request) {
       rating: stream.rating,
       thumbnail: stream.thumbnail,
       ingestActive: stream.ingestActive,
+      waitingRoomOpen: stream.waitingRoomOpen,
       isLive: stream.isLive,
       startedAt: stream.startedAt,
     },
@@ -110,6 +111,12 @@ export async function PATCH(req: Request) {
   let rating: ContentRating | undefined;
   let removeThumbnail = false;
   let newThumbnail: File | null = null;
+  let waitingRoomOpen: boolean | undefined;
+
+  if (form.has("waitingRoomOpen")) {
+    const raw = String(form.get("waitingRoomOpen") ?? "").trim().toLowerCase();
+    waitingRoomOpen = raw === "1" || raw === "true" || raw === "on";
+  }
 
   if (form.has("title")) {
     title = String(form.get("title") ?? "").trim();
@@ -186,6 +193,7 @@ export async function PATCH(req: Request) {
       ...(category2 !== undefined ? { category2 } : {}),
       ...(rating !== undefined ? { rating } : {}),
       ...(thumbnailUpdate !== undefined ? { thumbnail: thumbnailUpdate } : {}),
+      ...(waitingRoomOpen !== undefined ? { waitingRoomOpen } : {}),
     },
     select: {
       id: true,
@@ -195,6 +203,7 @@ export async function PATCH(req: Request) {
       rating: true,
       thumbnail: true,
       ingestActive: true,
+      waitingRoomOpen: true,
       isLive: true,
       startedAt: true,
     },

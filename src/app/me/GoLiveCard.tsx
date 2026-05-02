@@ -319,7 +319,10 @@ export function GoLiveCard({ slug, isLive, ingestActive, hasStreamKey }: Props) 
               <li>Choose Service: Custom.</li>
               <li>Set Server to {SERVER_URL}.</li>
               <li>Set Stream Key to the value shown above.</li>
-              <li>Click Start Streaming. Your live page updates automatically.</li>
+              <li>
+                Click Start Streaming. Use Pre-stream setup on the site to open
+                the viewer waiting room and go live when you are ready.
+              </li>
             </ol>
           </details>
         </div>

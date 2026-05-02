@@ -38,6 +38,7 @@ export default async function LiveSetupPage() {
       rating: true,
       thumbnail: true,
       ingestActive: true,
+      waitingRoomOpen: true,
       isLive: true,
       startedAt: true,
     },
@@ -49,7 +50,8 @@ export default async function LiveSetupPage() {
         <div>
           <h1 className="text-2xl font-semibold">Pre-stream setup</h1>
           <p className="text-sm text-muted">
-            Preview your ingest, tune stream details, then publish when ready.
+            Open the viewer waiting room when you are ready, adjust details
+            here, then go live from this page when OBS is connected.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -76,6 +78,7 @@ export default async function LiveSetupPage() {
         initialRating={stream.rating}
         initialThumbnail={stream.thumbnail}
         initialIngestActive={stream.ingestActive}
+        initialWaitingRoomOpen={stream.waitingRoomOpen}
         initialIsLive={stream.isLive}
         initialStartedAt={stream.startedAt}
       />

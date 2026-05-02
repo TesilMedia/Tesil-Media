@@ -1004,6 +1004,11 @@ body.page--embed-host {
   white-space: nowrap;
 }
 
+/* Live: slightly more breathing room than VOD’s responsive pill padding. */
+.player.player--live .player__time-group .player__time {
+  padding-inline: 8px;
+}
+
 .player__btn--frame {
   flex-shrink: 0;
   width: clamp(1rem, 0.55rem + 2.4cqw, 1.55rem);

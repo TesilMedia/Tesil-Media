@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
   const updated = await prisma.liveStream.update({
     where: { id: stream.id },
-    data: { isLive: true, startedAt: new Date() },
+    data: { isLive: true, startedAt: new Date(), waitingRoomOpen: false },
     select: { startedAt: true },
   });
 
