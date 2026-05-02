@@ -50,7 +50,7 @@ export default async function WatchPage({
       ? RATING_META[video.rating]
       : null;
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-4 px-4 py-16 text-center lg:px-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-4 py-16 text-center">
         <div className="flex items-center gap-2">
           <RatingBadge rating={video.rating} size="sm" />
           <span className="text-sm uppercase tracking-wider text-muted">
@@ -192,7 +192,7 @@ export default async function WatchPage({
     : null;
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-6">
+    <div className="w-full max-w-[1600px] py-6">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
           <VideoPlayer

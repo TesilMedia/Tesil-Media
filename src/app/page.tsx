@@ -25,15 +25,9 @@ export default async function HomePage() {
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-6">
+    <div className="w-full max-w-[1600px] pt-4 pb-6">
       {liveStreams.length > 0 && (
         <section className="mb-10">
-          <div className="mb-3 flex items-baseline justify-between">
-            <h1 className="text-xl font-semibold">Live now</h1>
-            <span className="text-sm text-muted">
-              {liveStreams.length} streaming
-            </span>
-          </div>
           <div className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {liveStreams.map((s) => (
               <LiveCard
@@ -54,10 +48,6 @@ export default async function HomePage() {
       )}
 
       <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-xl font-semibold">Recommended</h2>
-          <span className="text-sm text-muted">{videos.length} videos</span>
-        </div>
         {videos.length === 0 ? (
           <p className="text-muted">
             No videos yet. Sign in and upload a video to see it here.

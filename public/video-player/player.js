@@ -141,10 +141,10 @@
   }
 
   /**
-   * When false (typical phones / touch-first tablets), we do not mute+retry on
-   * failed `play()` — mobile autoplay policies reject audible playback anyway,
-   * and forcing mute felt like the app was silencing the user. Desktop keeps
-   * mute fallback so autoplay can still start without a tap.
+   * When false (typical phones / touch-first tablets), routine VOD `play()`
+   * calls skip mute+retry unless `startupAutoplay` is set — see
+   * `attemptPlayWithAutoplayMuteFallback` (iframe `?autoplay=1` after navigation
+   * has no in-frame gesture, so a muted retry is required there).
    */
   function autoplayMuteFallbackOk() {
     try {
@@ -415,9 +415,11 @@
    * Autoplay policies across browsers are inconsistent: Chrome refuses audible
    * autoplay without a user gesture, Safari is more lenient when the tab is
    * visible, Firefox varies by profile. Desktop/tablet-with-mouse: retry once
-   * muted on rejection so playback can start. Touch-primary viewports: skip
-   * that for VOD so we do not surprise-mute uploads; live HLS still passes
-   * `{ live: true }` so streams can start muted when the OS requires it.
+   * muted on rejection so playback can start. Touch-primary VOD: the host
+   * passes `?autoplay=1` after navigation — there is still no gesture inside
+   * the iframe, so we allow the same muted retry when `startupAutoplay` is set
+   * (otherwise NotAllowedError and a dead player). Live HLS always passes
+   * `{ live: true }` and pre-mutes on first tick where needed.
    */
   /**
    * @param {{ live?: boolean }} [opts] Pass `{ live: true }` for HLS/live so
@@ -425,7 +427,9 @@
    */
   function attemptPlayWithAutoplayMuteFallback(opts) {
     const allowMuteRetry =
-      opts && opts.live === true ? true : autoplayMuteFallbackOk();
+      opts && opts.live === true
+        ? true
+        : autoplayMuteFallbackOk() || startupAutoplay;
     if (opts && opts.live === true && startupAutoplay && !liveHasEverPlayed && !video.muted) {
       video.muted = true;
       setMutedUI();
@@ -830,8 +834,16 @@
     );
   }
 
+  /**
+   * Coarse-pointer (typical phones): first tap on the video area only arms;
+   * the next valid tap toggles play/pause. Reset when using explicit controls
+   * or a new load.
+   */
+  let coarseViewportPlayPauseArmed = false;
+
   video.addEventListener("loadstart", () => {
     webAudioVolumeSetupFailed = false;
+    coarseViewportPlayPauseArmed = false;
   });
 
   /** At 1× zoom, movement past this before pointerup cancels tap-to-play (scroll starting on the player). */
@@ -3136,7 +3148,10 @@
     }
   }
 
-  playPause.addEventListener("click", togglePlay);
+  playPause.addEventListener("click", () => {
+    coarseViewportPlayPauseArmed = false;
+    togglePlay();
+  });
 
   function blockNativeVideoDrag(e) {
     e.preventDefault();
@@ -3289,7 +3304,18 @@
     }
     videoViewport.dataset.panning = "false";
     const tapQuickEnough = holdMs <= VIEWPORT_TAP_MAX_DURATION_MS;
-    if (!dragged && zoomLevel <= 1.001 && !tapCancelled && tapQuickEnough) togglePlay();
+    if (!dragged && zoomLevel <= 1.001 && !tapCancelled && tapQuickEnough) {
+      if (usesCoarsePrimaryPointer) {
+        if (!coarseViewportPlayPauseArmed) {
+          coarseViewportPlayPauseArmed = true;
+        } else {
+          coarseViewportPlayPauseArmed = false;
+          togglePlay();
+        }
+      } else {
+        togglePlay();
+      }
+    }
   }
 
   videoViewport.addEventListener("pointerup", endViewportPointer);
@@ -3362,6 +3388,7 @@
   /** Mobile: tap outside #player hides chrome immediately (idle timer is too slow). */
   function dismissChromeForOutsideTap() {
     if (!usesCoarsePrimaryPointer) return;
+    coarseViewportPlayPauseArmed = false;
     clearChromeIdleTimer();
     player.classList.add("player--idle");
     player.classList.add("player--pointer-outside");
@@ -3996,6 +4023,7 @@
     switch (e.key) {
       case " ":
         e.preventDefault();
+        coarseViewportPlayPauseArmed = false;
         togglePlay();
         break;
       case "ArrowLeft":
@@ -4308,6 +4336,10 @@
     if (e.source !== window.parent) return;
     if (!e.data || typeof e.data.type !== "string") return;
     if (e.origin && e.origin !== window.location.origin) return;
+    if (e.data.type === "tesil-embed-dismiss-chrome") {
+      dismissChromeForOutsideTap();
+      return;
+    }
     if (e.data.type === "tesil-embed-set-file") {
       if (e.data.file instanceof File) {
         loadVideoFromFile(e.data.file);

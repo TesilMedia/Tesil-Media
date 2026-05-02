@@ -25,7 +25,7 @@ export default async function SignInPage({
   }
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 py-16">
+    <div className="mx-auto w-full max-w-md py-16">
       <h1 className="mb-1 text-2xl font-semibold">Sign in to TESIL</h1>
       <p className="mb-6 text-sm text-muted">
         Welcome back. Sign in to follow channels and go live.

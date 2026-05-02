@@ -3,9 +3,11 @@ import { Space_Grotesk, Righteous } from "next/font/google";
 
 import "./globals.css";
 import { MobileSidebarProvider } from "@/components/MobileSidebarContext";
+import { TopNavCollapseProvider } from "@/components/TopNavCollapseContext";
 import { ThemeInitScript } from "@/components/ThemeInitScript";
 import { TopNav } from "@/components/TopNav";
 import { Sidebar } from "@/components/Sidebar";
+import { TopNavRevealButton } from "@/components/TopNavRevealButton";
 import { auth } from "@/lib/auth";
 import {
   STALE_SESSION_SIGN_OUT_URL,
@@ -66,15 +68,18 @@ export default async function RootLayout({
       </head>
       <body className="bg-bg text-text">
         <MobileSidebarProvider>
-          <div className="flex h-dvh max-h-dvh min-h-0 flex-col">
-            <TopNav user={session?.user ?? null} channel={channelNav} />
+          <TopNavCollapseProvider>
+            <div className="flex h-dvh max-h-dvh min-h-0 flex-col">
+              <TopNav user={session?.user ?? null} channel={channelNav} />
+              <TopNavRevealButton />
             <div className="flex min-h-0 flex-1 overflow-hidden">
-              <Sidebar />
-              <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-                {children}
-              </main>
+                <Sidebar />
+                <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4">
+                  {children}
+                </main>
+              </div>
             </div>
-          </div>
+          </TopNavCollapseProvider>
         </MobileSidebarProvider>
       </body>
     </html>

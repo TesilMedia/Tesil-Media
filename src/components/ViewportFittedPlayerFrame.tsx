@@ -74,6 +74,39 @@ export function ViewportFittedPlayerFrame({
     };
   }, []);
 
+  /**
+   * The player runs in an iframe; taps on the host page never reach the iframe
+   * document. On coarse pointers, tell the embed to hide its HUD immediately.
+   */
+  useEffect(() => {
+    const coarse =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(pointer: coarse)").matches;
+    if (!coarse) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const frame = frameRef.current;
+      if (!frame) return;
+      const t = e.target;
+      if (!(t instanceof Node) || frame.contains(t)) return;
+      const iframe = frame.querySelector("iframe");
+      const w = iframe?.contentWindow;
+      if (!w) return;
+      try {
+        w.postMessage(
+          { type: "tesil-embed-dismiss-chrome" },
+          window.location.origin,
+        );
+      } catch {
+        /* noop */
+      }
+    };
+
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => window.removeEventListener("pointerdown", onPointerDown, true);
+  }, []);
+
   const frameStyle: CSSProperties = {
     aspectRatio: "16 / 9",
     width: size ? `${size.width}px` : "100%",

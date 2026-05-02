@@ -43,7 +43,7 @@ export default async function LiveSetupPage() {
   });
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-4 py-8 lg:px-6">
+    <div className="w-full max-w-[1400px] py-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
         <div>
           <h1 className="text-2xl font-semibold">Pre-stream setup</h1>

@@ -51,7 +51,7 @@ export default async function CategoryPage({
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-6">
+    <div className="w-full max-w-[1600px] py-6">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
         <div className="flex items-center gap-3">
           <span

@@ -23,7 +23,7 @@ export default async function UploadPage() {
   const videoCount = await prisma.video.count({ where: { channelId: channel.id } });
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-10 lg:px-6">
+    <div className="mx-auto w-full max-w-2xl py-10">
       <h1 className="mb-1 text-2xl font-semibold">Upload a video</h1>
       <p className="mb-6 text-sm text-muted">
         Uploading to{" "}

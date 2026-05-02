@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+
 interface ChatMessage {
   id: string;
   body: string;
@@ -102,17 +103,19 @@ export function ChatPanel({ slug, currentUserId, onClose }: Props) {
     <div className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-border bg-[color-mix(in_srgb,var(--color-bg)_80%,transparent)] backdrop-blur-sm">
       <div className="shrink-0 border-b border-border px-4 py-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold">Live Chat</h2>
-        {onClose && (
-          <button
-            onClick={onClose}
-            aria-label="Close chat"
-            className="text-muted hover:text-text"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M18 6 6 18M6 6l12 12" />
-            </svg>
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {onClose && (
+            <button
+              onClick={onClose}
+              aria-label="Close chat"
+              className="text-muted hover:text-text"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* flex-col-reverse: first DOM child = visual bottom, so newest message renders at the bottom

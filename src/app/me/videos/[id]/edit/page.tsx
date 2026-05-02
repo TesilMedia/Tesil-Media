@@ -31,7 +31,7 @@ export default async function EditVideoPage({
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-8 lg:px-6">
+    <div className="mx-auto w-full max-w-4xl py-8">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <Link

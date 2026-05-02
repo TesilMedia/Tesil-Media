@@ -47,7 +47,7 @@ export default async function LivePage({
       ? RATING_META[stream.rating]
       : null;
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-4 px-4 py-16 text-center lg:px-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-4 py-16 text-center">
         <div className="flex items-center gap-2">
           <RatingBadge rating={stream.rating} size="sm" />
           <span className="text-sm uppercase tracking-wider text-muted">
@@ -82,7 +82,7 @@ export default async function LivePage({
 
   if (!stream.isLive && stream.ingestActive) {
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-4 px-4 py-16 text-center lg:px-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-4 py-16 text-center">
         <span className="rounded bg-accent px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-on-accent">
           Starting soon
         </span>
@@ -115,38 +115,40 @@ export default async function LivePage({
 
   return (
     <ChatDrawerProvider>
-      <div className="w-full pb-6 pl-2 pr-2 pt-2 lg:pl-2 lg:pr-2 lg:pt-2">
-        <div className="flex flex-col gap-2 lg:grid lg:grid-cols-[minmax(0,4fr)_minmax(0,1fr)] lg:items-stretch lg:gap-2">
-          {/* Top row: keep desktop chat capped to the player height. */}
-          <div className="min-w-0">
-            {stream.streamKey ? (
-              <VideoPlayer
-                src={`/hls/${channel.slug}/index.m3u8`}
-                title={stream.title}
-                liveStartedAt={stream.isLive ? stream.startedAt : null}
-                disableSeek={stream.isLive}
-                hideLivePill={!stream.isLive}
-                hideTimeGroup={!stream.isLive}
-              />
-            ) : (
-              <VideoPlayer
-                src={stream.streamUrl}
-                title={stream.title}
-                liveStartedAt={stream.isLive ? stream.startedAt : null}
-              />
-            )}
-          </div>
+      <div className="w-full pb-6 pt-2">
+        <div className="flex flex-col gap-2">
+          {/* Top row: when the player is height-capped, let chat fill the freed width. */}
+          <div className="flex flex-col gap-2 md:flex-row md:items-stretch live-landscape-row">
+            <div className="min-w-0 md:live-player-slot live-landscape-player">
+              {stream.streamKey ? (
+                <VideoPlayer
+                  src={`/hls/${channel.slug}/index.m3u8`}
+                  title={stream.title}
+                  liveStartedAt={stream.isLive ? stream.startedAt : null}
+                  disableSeek={stream.isLive}
+                  hideLivePill={!stream.isLive}
+                  hideTimeGroup={!stream.isLive}
+                />
+              ) : (
+                <VideoPlayer
+                  src={stream.streamUrl}
+                  title={stream.title}
+                  liveStartedAt={stream.isLive ? stream.startedAt : null}
+                />
+              )}
+            </div>
 
-          {/* Right: chat panel — desktop only */}
-          <div className="hidden min-h-0 min-w-0 lg:flex lg:self-stretch">
-            <ChatPanel
-              slug={channel.slug}
-              currentUserId={session?.user?.id ?? null}
-            />
+            {/* Right: inline chat panel for tablet-and-up layouts. */}
+            <div className="hidden min-h-0 min-w-72 md:flex md:flex-1 md:self-stretch live-landscape-chat">
+              <ChatPanel
+                slug={channel.slug}
+                currentUserId={session?.user?.id ?? null}
+              />
+            </div>
           </div>
 
           {/* Stream info */}
-          <div className="min-w-0 lg:col-start-1">
+          <div className="min-w-0">
             {stream.streamKey && (stream.isLive || stream.vodVideoId) ? (
               <div className="flex gap-2">
                 <span className="flex items-center gap-1.5 rounded-full bg-live px-4 py-1.5 text-sm font-medium text-white">
@@ -215,7 +217,7 @@ export default async function LivePage({
                     <div>watching now</div>
                   </div>
                 ) : null}
-                <div className="lg:hidden">
+                <div className="md:hidden">
                   <ChatToggleButton />
                 </div>
               </div>

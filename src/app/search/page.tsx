@@ -20,7 +20,7 @@ export default async function SearchPage({
 
   if (!query) {
     return (
-      <div className="mx-auto w-full max-w-[1600px] px-4 py-10 lg:px-6">
+      <div className="w-full max-w-[1600px] py-10">
         <h1 className="text-xl font-semibold">Search</h1>
         <p className="mt-2 text-muted">
           Type a query in the search box above to find channels and videos.
@@ -66,7 +66,7 @@ export default async function SearchPage({
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-6">
+    <div className="w-full max-w-[1600px] py-6">
       <h1 className="mb-1 text-xl font-semibold">
         Results for &ldquo;{query}&rdquo;
       </h1>

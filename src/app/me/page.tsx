@@ -61,7 +61,7 @@ export default async function ProfilePage() {
   const hiddenRatings = parseHiddenRatings(userPrefs?.hiddenRatings);
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-4 py-8 lg:px-6">
+    <div className="w-full max-w-[1400px] py-8">
       <header className="retro-tricolor-divider-b retro-tricolor-divider-caps mb-6 flex flex-wrap items-end justify-between gap-3 pb-4">
         <div>
           <h1 className="text-2xl font-semibold">Your channel</h1>

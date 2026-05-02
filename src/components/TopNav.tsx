@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { CollapsibleTopNav } from "@/components/CollapsibleTopNav";
 import { MobileNavToggle } from "@/components/MobileNavToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TopNavSearchInput } from "@/components/TopNavSearchInput";
@@ -19,10 +20,7 @@ type Props = {
 
 export function TopNav({ user, channel }: Props) {
   return (
-    <header
-      id="app-top-nav"
-      className="retro-tricolor-divider-b sticky top-0 z-30 flex h-14 shrink-0 items-center gap-[8px] bg-bg/85 px-[8px] pb-[6px] backdrop-blur supports-[backdrop-filter]:bg-bg/70"
-    >
+    <CollapsibleTopNav>
       <div className="flex shrink-0 items-center gap-[8px]">
         <MobileNavToggle />
         <Link
@@ -89,6 +87,6 @@ export function TopNav({ user, channel }: Props) {
           </div>
         )}
       </div>
-    </header>
+    </CollapsibleTopNav>
   );
 }

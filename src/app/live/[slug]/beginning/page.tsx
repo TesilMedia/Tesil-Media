@@ -32,7 +32,7 @@ export default async function BeginningPage({
   if (!stream.isLive) notFound();
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-6">
+    <div className="w-full max-w-[1600px] py-6">
       <VideoPlayer
         src={`/api/stream/${slug}/beginning?t=${Date.now()}`}
         title={stream.title}

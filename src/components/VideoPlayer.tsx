@@ -21,7 +21,7 @@ type VideoPlayerProps = {
   hideTimeGroup?: boolean;
 };
 
-const PLAYER_ASSET_VERSION = "llhls-chrome-status-20260428";
+const PLAYER_ASSET_VERSION = "embed-chrome-dismiss-20260429";
 
 /**
  * Embeds the Tesil Video Player via an iframe pointing at the bundled
