@@ -184,7 +184,7 @@ export function GoLiveCard({ slug, isLive, ingestActive, hasStreamKey }: Props) 
             </span>
           ) : ingestState ? (
             <span className="rounded bg-accent px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-on-accent">
-              Preview ready
+              Ingest active
             </span>
           ) : (
             <span className="rounded bg-surface-2 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-muted">
@@ -303,13 +303,6 @@ export function GoLiveCard({ slug, isLive, ingestActive, hasStreamKey }: Props) 
             </Link>
           </div>
 
-          {!liveState && ingestState ? (
-            <p className="mt-2 text-xs text-muted">
-              OBS is publishing, but viewers are still in the waiting room until
-              you press <strong>Go live</strong> in pre-stream setup.
-            </p>
-          ) : null}
-
           <details className="mt-3 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
             <summary className="cursor-pointer text-sm font-medium text-text">
               How to set up OBS
@@ -320,8 +313,9 @@ export function GoLiveCard({ slug, isLive, ingestActive, hasStreamKey }: Props) 
               <li>Set Server to {SERVER_URL}.</li>
               <li>Set Stream Key to the value shown above.</li>
               <li>
-                Click Start Streaming. Use Pre-stream setup on the site to open
-                the viewer waiting room and go live when you are ready.
+                Set your title, categories, and thumbnail in Pre-stream setup,
+                then click Start Streaming in OBS &mdash; the stream goes live
+                automatically as soon as OBS connects.
               </li>
             </ol>
           </details>

@@ -83,15 +83,17 @@ export async function POST(req: Request) {
     ) {
       return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     }
+    const now = new Date();
     await prisma.$transaction([
       prisma.liveMessage.deleteMany({ where: { streamId: stream.id } }),
       prisma.liveStream.update({
         where: { id: stream.id },
         data: {
           ingestActive: true,
-          isLive: false,
-          startedAt: null,
-          lastIngestAt: new Date(),
+          isLive: true,
+          startedAt: now,
+          lastIngestAt: now,
+          waitingRoomOpen: false,
           vodVideoId: null,
         },
       }),

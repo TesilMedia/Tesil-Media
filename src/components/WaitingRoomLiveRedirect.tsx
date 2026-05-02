@@ -9,7 +9,7 @@ type Props = {
 
 /**
  * Polls live status so viewers on the waiting-room screen transition to the
- * live player as soon as the streamer clicks Go live (no manual refresh).
+ * live player as soon as the streamer's OBS connects (no manual refresh).
  */
 export function WaitingRoomLiveRedirect({ slug }: Props) {
   const router = useRouter();

@@ -50,8 +50,8 @@ export default async function LiveSetupPage() {
         <div>
           <h1 className="text-2xl font-semibold">Pre-stream setup</h1>
           <p className="text-sm text-muted">
-            Open the viewer waiting room when you are ready, adjust details
-            here, then go live from this page when OBS is connected.
+            Set your title, categories, and thumbnail here, then start streaming
+            in OBS &mdash; the stream goes live automatically when OBS connects.
           </p>
         </div>
         <div className="flex items-center gap-2">

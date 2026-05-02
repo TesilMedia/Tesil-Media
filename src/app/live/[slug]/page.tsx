@@ -7,6 +7,7 @@ import { ChatPanel } from "@/components/ChatPanel";
 import { ChatDrawer } from "@/components/ChatDrawer";
 import { ChatDrawerProvider } from "@/components/ChatDrawerContext";
 import { ChatToggleButton } from "@/components/ChatToggleButton";
+import { LivePlayer } from "@/components/LivePlayer";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { RatingBadge } from "@/components/RatingBadge";
 import { WaitingRoomLiveRedirect } from "@/components/WaitingRoomLiveRedirect";
@@ -123,13 +124,11 @@ export default async function LivePage({
           <div className="flex flex-col gap-2 md:flex-row md:items-stretch live-landscape-row">
             <div className="min-w-0 md:live-player-slot live-landscape-player">
               {stream.streamKey ? (
-                <VideoPlayer
+                <LivePlayer
                   src={`/hls/${channel.slug}/index.m3u8`}
                   title={stream.title}
-                  liveStartedAt={stream.isLive ? stream.startedAt : null}
-                  disableSeek={stream.isLive}
-                  hideLivePill={!stream.isLive}
-                  hideTimeGroup={!stream.isLive}
+                  liveStartedAt={stream.startedAt}
+                  isLive={stream.isLive}
                 />
               ) : (
                 <VideoPlayer

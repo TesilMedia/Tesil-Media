@@ -26,18 +26,29 @@ rtmpAddress: :1935
 rtmpEncryption: 'no'
 
 # HLS. The /hls/* rewrite in next.config.ts proxies viewers here.
-# - hlsVariant: mpegts uses MPEG-TS segments, matching the old FFmpeg pipeline
-#   and avoiding Chrome desktop's fMP4/MSE "unsupported source" failure with
-#   this RTMP ingest.
+# - hlsVariant: lowLatency emits true LL-HLS (#EXT-X-PART + EXT-X-PRELOAD-HINT
+#   + EXT-X-SERVER-CONTROL). The other two variants (`mpegts` and `fmp4`)
+#   produce only classic-HLS segments — `fmp4` is just CMAF segments without
+#   the LL-HLS spec features and caps you at ~3-5s end-to-end latency
+#   regardless of part duration.
 # - hlsSegmentDuration is a minimum; final segment length is bounded by OBS's
-#   keyframe interval.
+#   keyframe interval. For best LL-HLS behavior keep OBS keyframe interval
+#   = 1s so that segments don't grow past 1s and parts are flushed promptly.
+#   (At a 2s keyframe interval segments are 2s, which still works but adds a
+#   second of float in the live window.)
+# - hlsPartDuration: target latency floor. ~200ms is the LL-HLS sweet spot:
+#   short enough for sub-2s glass-to-glass on a healthy LAN, long enough that
+#   partial-segment HTTP overhead doesn't dominate.
+# - hlsSegmentCount governs the live window. 7 × 1s = 7s history, which is
+#   what the LL-HLS spec recommends as a minimum so player buffers can absorb
+#   one network hiccup without falling off the rolling window.
 # - hlsAlwaysRemux: yes ensures HLS is published even when no viewer is
 #   connected (so the first viewer doesn't wait for a keyframe).
 hls: yes
 hlsAddress: :8888
 hlsEncryption: no
 hlsAlwaysRemux: yes
-hlsVariant: mpegts
+hlsVariant: lowLatency
 hlsSegmentCount: 7
 hlsSegmentDuration: 1s
 hlsPartDuration: 200ms

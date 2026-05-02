@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ReactNode } from "react";
 
-import { VideoPlayer } from "@/components/VideoPlayer";
+import { LivePlayer } from "@/components/LivePlayer";
 
 type Props = {
   slug: string;
@@ -15,13 +15,11 @@ type Props = {
 export function LivePlayerToggle({ slug, isLive, title, startedAt, vodVideoId, action }: Props) {
   return (
     <div>
-      <VideoPlayer
+      <LivePlayer
         src={`/hls/${slug}/index.m3u8`}
         title={title}
-        liveStartedAt={isLive ? startedAt : null}
-        disableSeek={isLive}
-        hideLivePill={!isLive}
-        hideTimeGroup={!isLive}
+        liveStartedAt={startedAt}
+        isLive={isLive}
       />
       {(isLive || vodVideoId) && (
         <div className="mt-2 flex gap-2">

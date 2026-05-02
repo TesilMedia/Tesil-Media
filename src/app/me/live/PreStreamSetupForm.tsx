@@ -86,12 +86,9 @@ export function PreStreamSetupForm({
       : initialStartedAt,
   );
   const [saving, setSaving] = useState(false);
-  const [publishing, setPublishing] = useState(false);
   const [wrBusy, setWrBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
-  const canGoLive = ingestActive && !isLive;
 
   async function refreshState() {
     try {
@@ -198,33 +195,6 @@ export function PreStreamSetupForm({
     }
   }
 
-  async function goLive() {
-    setError(null);
-    setSuccess(null);
-    setPublishing(true);
-    try {
-      const res = await fetch("/api/stream/go-live", { method: "POST" });
-      const data = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        startedAt?: string | null;
-      };
-      if (!res.ok) {
-        setError(data.error ?? `Failed to go live (HTTP ${res.status}).`);
-        return;
-      }
-      setIsLive(true);
-      setWaitingRoomOpen(false);
-      setStartedAt(data.startedAt ?? new Date().toISOString());
-      setSuccess("You are now live.");
-      router.push(`/live/${slug}`);
-      router.refresh();
-    } catch {
-      setError("Network error while going live.");
-    } finally {
-      setPublishing(false);
-    }
-  }
-
   return (
     <div className="flex flex-col gap-6">
       {error ? (
@@ -242,7 +212,7 @@ export function PreStreamSetupForm({
         <LivePlayerToggle
           slug={slug}
           isLive={isLive}
-          title={`${title} (private preview)`}
+          title={title}
           startedAt={startedAt}
           vodVideoId={null}
         />
@@ -253,7 +223,7 @@ export function PreStreamSetupForm({
             </span>
           ) : ingestActive ? (
             <span className="rounded bg-accent px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-on-accent">
-              Preview ready
+              Ingest active
             </span>
           ) : (
             <span className="rounded bg-surface-2 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-muted">
@@ -274,19 +244,23 @@ export function PreStreamSetupForm({
             Open public page
           </Link>
         </div>
+        <p className="text-xs text-muted">
+          Save your setup, then start streaming in OBS. The stream goes live
+          automatically the moment OBS connects.
+        </p>
       </section>
 
       <section className="rounded-lg border border-border bg-surface p-4">
         <h2 className="text-sm font-semibold text-text">Viewer waiting room</h2>
         <p className="mt-1 text-xs text-muted">
           When on, your public live URL shows a &quot;Starting soon&quot; page
-          until you go live. Turn this on before OBS if you want viewers waiting
-          while you finish title, categories, and thumbnail.
+          until OBS starts streaming. Turn this on before OBS if you want
+          viewers waiting while you finish title, categories, and thumbnail.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            disabled={wrBusy || isLive || publishing}
+            disabled={wrBusy || isLive}
             onClick={() => void patchWaitingRoom(!waitingRoomOpen)}
             className="rounded-md border border-border bg-surface-2 px-4 py-2 text-sm font-medium hover:bg-surface disabled:opacity-60"
           >
@@ -298,7 +272,7 @@ export function PreStreamSetupForm({
           </button>
           <span className="text-xs text-muted">
             {isLive
-              ? "Ended when you went live."
+              ? "Ended when OBS started streaming."
               : waitingRoomOpen
                 ? "Visitors see Starting soon."
                 : "Visitors see the normal live page (offline until ingest)."}
@@ -317,7 +291,7 @@ export function PreStreamSetupForm({
               maxLength={200}
               value={title}
               onChange={(e) => setTitle(e.currentTarget.value)}
-              disabled={saving || publishing}
+              disabled={saving}
               className="rounded-md border border-border bg-bg px-3 py-2 outline-none focus:border-accent/60 disabled:opacity-60"
             />
           </label>
@@ -325,13 +299,13 @@ export function PreStreamSetupForm({
           <CategoryPicker
             value={categories}
             onChange={setCategories}
-            disabled={saving || publishing}
+            disabled={saving}
             required
           />
 
           <fieldset
             className="flex flex-col gap-2 text-sm"
-            disabled={saving || publishing}
+            disabled={saving}
           >
             <legend className="text-muted">Content rating *</legend>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -390,7 +364,7 @@ export function PreStreamSetupForm({
                   setThumbnailFile(file);
                   if (file) setRemoveThumbnail(false);
                 }}
-                disabled={saving || publishing}
+                disabled={saving}
               />
             </label>
             {thumbnail || thumbnailFile ? (
@@ -402,7 +376,7 @@ export function PreStreamSetupForm({
                   setRemoveThumbnail(true);
                   setThumbnail(null);
                 }}
-                disabled={saving || publishing}
+                disabled={saving}
               >
                 Remove thumbnail
               </button>
@@ -412,26 +386,12 @@ export function PreStreamSetupForm({
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button
               type="submit"
-              disabled={saving || publishing}
+              disabled={saving}
               className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-60"
             >
               {saving ? "Saving..." : "Save setup"}
             </button>
-            <button
-              type="button"
-              onClick={() => void goLive()}
-              disabled={!canGoLive || saving || publishing}
-              className="rounded-md bg-live px-4 py-2 text-sm font-semibold text-white hover:brightness-105 disabled:opacity-60"
-            >
-              {publishing ? "Going live..." : isLive ? "Live now" : "Go live"}
-            </button>
           </div>
-          {!ingestActive && !isLive ? (
-            <p className="text-xs text-muted">
-              Start streaming in OBS first. Once ingest is active, this button
-              becomes available.
-            </p>
-          ) : null}
         </form>
       </section>
     </div>
