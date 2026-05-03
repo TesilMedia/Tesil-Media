@@ -24,6 +24,7 @@ type StreamState = {
   waitingRoomOpen: boolean;
   isLive: boolean;
   startedAt: string | null;
+  vodVideoId?: string | null;
 };
 
 type SetupResponse = {
@@ -44,6 +45,7 @@ type Props = {
   initialWaitingRoomOpen: boolean;
   initialIsLive: boolean;
   initialStartedAt: Date | string | null;
+  initialVodVideoId: string | null;
 };
 
 function normalizeRating(value: string): ContentRating {
@@ -65,6 +67,7 @@ export function PreStreamSetupForm({
   initialWaitingRoomOpen,
   initialIsLive,
   initialStartedAt,
+  initialVodVideoId,
 }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState(initialTitle);
@@ -80,6 +83,7 @@ export function PreStreamSetupForm({
   const [ingestActive, setIngestActive] = useState(initialIngestActive);
   const [waitingRoomOpen, setWaitingRoomOpen] = useState(initialWaitingRoomOpen);
   const [isLive, setIsLive] = useState(initialIsLive);
+  const [vodVideoId, setVodVideoId] = useState<string | null>(initialVodVideoId);
   const [startedAt, setStartedAt] = useState<string | null>(
     initialStartedAt instanceof Date
       ? initialStartedAt.toISOString()
@@ -99,6 +103,7 @@ export function PreStreamSetupForm({
       setWaitingRoomOpen(Boolean(data.stream.waitingRoomOpen));
       setIsLive(Boolean(data.stream.isLive));
       setStartedAt(data.stream.startedAt ?? null);
+      setVodVideoId(data.stream.vodVideoId ?? null);
       if (!thumbnailFile && !removeThumbnail) {
         setThumbnail(data.stream.thumbnail ?? null);
       }
@@ -127,6 +132,7 @@ export function PreStreamSetupForm({
         return;
       }
       setWaitingRoomOpen(Boolean(data.stream.waitingRoomOpen));
+      setVodVideoId(data.stream.vodVideoId ?? null);
       router.refresh();
     } catch {
       setError("Network error while updating waiting room.");
@@ -186,6 +192,7 @@ export function PreStreamSetupForm({
       setWaitingRoomOpen(Boolean(data.stream.waitingRoomOpen));
       setIsLive(Boolean(data.stream.isLive));
       setStartedAt(data.stream.startedAt ?? null);
+      setVodVideoId(data.stream.vodVideoId ?? null);
       setSuccess("Setup saved.");
       router.refresh();
     } catch {
@@ -214,7 +221,7 @@ export function PreStreamSetupForm({
           isLive={isLive}
           title={title}
           startedAt={startedAt}
-          vodVideoId={null}
+          vodVideoId={vodVideoId}
         />
         <div className="flex flex-wrap items-center gap-2">
           {isLive ? (
@@ -238,7 +245,7 @@ export function PreStreamSetupForm({
             Refresh status
           </button>
           <Link
-            href={`/live/${slug}`}
+            href={vodVideoId && isLive ? `/watch/${vodVideoId}` : `/live/${slug}`}
             className="rounded-full border border-border bg-surface px-3 py-1 text-xs hover:bg-surface-2"
           >
             Open public page

@@ -23,6 +23,8 @@ type LiveCardProps = {
   viewers: number;
   rating?: string | null;
   isLive: boolean;
+  /** Canonical watch URL for RTMP live sessions (set once OBS connects). */
+  vodVideoId?: string | null;
   // Stream URL — direct video files (MP4/WebM) and HLS (.m3u8) are previewed
   // natively; embed-only sources like YouTube/Twitch fall back to the thumbnail.
   streamUrl?: string | null;
@@ -63,6 +65,11 @@ export function LiveCard(props: LiveCardProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hoverTimerRef = useRef<number | null>(null);
   const trueHover = useTrueHover();
+
+  const liveHref =
+    props.isLive && props.vodVideoId
+      ? `/watch/${props.vodVideoId}`
+      : `/live/${props.channelSlug}`;
 
   const [showPreview, setShowPreview] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
@@ -156,7 +163,7 @@ export function LiveCard(props: LiveCardProps) {
   return (
     <article className="group flex flex-col gap-2">
       <Link
-        href={`/live/${props.channelSlug}`}
+        href={liveHref}
         className="relative block aspect-video touch-manipulation overflow-hidden rounded-lg bg-surface shadow-card"
         onPointerEnter={usePointerHover ? handleThumbPointerEnter : undefined}
         onPointerLeave={usePointerHover ? handleThumbPointerLeave : undefined}
@@ -234,7 +241,7 @@ export function LiveCard(props: LiveCardProps) {
         <div className="min-w-0 flex-1">
           <div className="min-w-0">
             <Link
-              href={`/live/${props.channelSlug}`}
+              href={liveHref}
               className={`min-w-0 w-full text-sm font-semibold leading-snug hover:underline ${titleOverflowClampClass(props.title)}`}
             >
               {props.title}

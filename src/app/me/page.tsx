@@ -39,7 +39,7 @@ export default async function ProfilePage() {
       streamUrl: `/hls/${channel.slug}/index.m3u8`,
       isLive: false,
     },
-    select: { isLive: true, streamKey: true, ingestActive: true },
+    select: { isLive: true, streamKey: true, ingestActive: true, vodVideoId: true },
   });
 
   const [videos, totalViews, userPrefs] = await Promise.all([
@@ -114,6 +114,7 @@ export default async function ProfilePage() {
             isLive={stream.isLive}
             ingestActive={stream.ingestActive}
             hasStreamKey={Boolean(stream.streamKey)}
+            liveWatchVideoId={stream.vodVideoId}
           />
           <ContentFilterCard initialHidden={hiddenRatings} />
         </section>

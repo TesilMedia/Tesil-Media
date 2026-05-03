@@ -78,6 +78,7 @@ export async function GET(req: Request) {
       waitingRoomOpen: stream.waitingRoomOpen,
       isLive: stream.isLive,
       startedAt: stream.startedAt,
+      vodVideoId: stream.vodVideoId,
     },
   });
 }
@@ -206,8 +207,26 @@ export async function PATCH(req: Request) {
       waitingRoomOpen: true,
       isLive: true,
       startedAt: true,
+      vodVideoId: true,
     },
   });
+
+  if (updated.vodVideoId) {
+    await prisma.video
+      .update({
+        where: { id: updated.vodVideoId },
+        data: {
+          ...(title !== undefined ? { title: title.slice(0, 200) } : {}),
+          ...(category !== undefined ? { category } : {}),
+          ...(category2 !== undefined ? { category2 } : {}),
+          ...(rating !== undefined ? { rating } : {}),
+          ...(thumbnailUpdate !== undefined ? { thumbnail: thumbnailUpdate } : {}),
+        },
+      })
+      .catch(() => {
+        /* placeholder row may have been replaced — ignore */
+      });
+  }
 
   return NextResponse.json({ ok: true, stream: updated });
 }

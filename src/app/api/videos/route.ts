@@ -25,6 +25,7 @@ import {
   getViewerHiddenRatings,
   ratingFilterWhere,
 } from "@/lib/viewerPrefs";
+import { EXCLUDE_LIVE_RECORDING_PLACEHOLDERS } from "@/lib/videoCatalog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,7 +54,9 @@ export async function GET(req: Request) {
     : await getViewerHiddenRatings(authUser?.id ?? null);
 
   const ratingClause = ratingFilterWhere(hidden) as Prisma.VideoWhereInput;
-  const parts: Prisma.VideoWhereInput[] = [];
+  const parts: Prisma.VideoWhereInput[] = [
+    EXCLUDE_LIVE_RECORDING_PLACEHOLDERS,
+  ];
   if (Object.keys(ratingClause).length > 0) {
     parts.push(ratingClause);
   }

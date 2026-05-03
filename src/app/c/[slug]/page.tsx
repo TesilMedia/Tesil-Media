@@ -9,6 +9,7 @@ import {
   getViewerHiddenRatings,
   ratingFilterWhere,
 } from "@/lib/viewerPrefs";
+import { EXCLUDE_LIVE_RECORDING_PLACEHOLDERS } from "@/lib/videoCatalog";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,9 @@ export default async function ChannelPage({
     include: {
       stream: true,
       videos: {
-        where: { ...ratingWhere },
+        where: {
+          AND: [ratingWhere, EXCLUDE_LIVE_RECORDING_PLACEHOLDERS],
+        },
         orderBy: { createdAt: "desc" },
       },
       _count: { select: { videos: true } },
@@ -132,6 +135,7 @@ export default async function ChannelPage({
                   rating={channel.stream.rating}
                   isLive={isLive}
                   streamUrl={channel.stream.streamUrl}
+                  vodVideoId={channel.stream.vodVideoId}
                 />
               ) : null}
               {channel.videos.map((v) => (

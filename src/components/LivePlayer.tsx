@@ -47,6 +47,11 @@ type LivePlayerProps = {
    * but suppress the pill so viewers don't think the broadcast has started.
    */
   isLive: boolean;
+  /**
+   * See `ViewportFittedPlayerFrame` — reserve space at the bottom of the
+   * viewport so title / channel / like row can stay in view.
+   */
+  viewportBottomInset?: number;
 };
 
 type ErrorInfo = {
@@ -108,6 +113,7 @@ export function LivePlayer({
   className,
   liveStartedAt,
   isLive,
+  viewportBottomInset,
 }: LivePlayerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -911,14 +917,18 @@ export function LivePlayer({
   };
 
   return (
-    <ViewportFittedPlayerFrame className={className}>
-      <div
-        ref={containerRef}
-        className="absolute inset-0 flex h-full w-full items-center justify-center bg-black"
-        style={containerStyle}
-        data-hud={hudVisible ? "visible" : "hidden"}
-        data-paused={paused ? "true" : "false"}
+    <div className="flex w-full min-w-0 md:justify-start">
+      <ViewportFittedPlayerFrame
+        className={className}
+        bottomInset={viewportBottomInset}
       >
+        <div
+          ref={containerRef}
+          className="absolute inset-0 flex h-full w-full items-center justify-center bg-black"
+          style={containerStyle}
+          data-hud={hudVisible ? "visible" : "hidden"}
+          data-paused={paused ? "true" : "false"}
+        >
         <video
           ref={videoRef}
           className="absolute inset-0 h-full w-full object-contain"
@@ -1178,6 +1188,7 @@ export function LivePlayer({
           </div>
         ) : null}
       </div>
-    </ViewportFittedPlayerFrame>
+      </ViewportFittedPlayerFrame>
+    </div>
   );
 }

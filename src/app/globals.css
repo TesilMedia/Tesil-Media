@@ -97,14 +97,25 @@
     display: none;
   }
 
+  /* Reserve min chat width (18rem) + gap (16px). At xl, chat is fixed 400px — see breakpoint below. */
   .live-player-slot {
     flex: 0 0
       min(
-        max(0px, calc(100% - 18rem - 0.5rem)),
+        max(0px, calc(100% - 18rem - 16px)),
         var(--live-player-width-cap)
       );
     max-width: 100%;
     min-width: 0;
+  }
+
+  @media (min-width: 1280px) {
+    .live-player-slot {
+      flex: 0 0
+        min(
+          max(0px, calc(100% - 400px - 16px)),
+          var(--live-player-width-cap)
+        );
+    }
   }
 
   /*
@@ -463,9 +474,15 @@ h3 {
   }
 
   .live-landscape-player {
-    flex: 0 0 min(max(0px, calc(100% - 18rem - 0.5rem)), var(--live-player-width-cap));
+    flex: 0 0 min(max(0px, calc(100% - 18rem - 16px)), var(--live-player-width-cap));
     max-width: 100%;
     min-width: 0;
+  }
+
+  @media (min-width: 1280px) {
+    .live-landscape-player {
+      flex: 0 0 min(max(0px, calc(100% - 400px - 16px)), var(--live-player-width-cap));
+    }
   }
 
   .live-landscape-chat {
@@ -486,6 +503,31 @@ h3 {
   body:has(#app-top-nav.top-nav-open) main {
     padding-top: 3.5rem;
   }
+}
+
+/*
+ * Live player + chat row: page supplies horizontal inset via [data-live-page].
+ *
+ * Reserve the scrollbar gutter so the chat lines up against a stable visual
+ * right edge instead of jumping when the page grows tall enough to scroll.
+ *
+ * Padding-left on the wrapper is the full 16px (no scrollbar on the left).
+ * Padding-right on the wrapper subtracts the scrollbar width so the *visible*
+ * gap from the chat to the viewport edge is also 16px (6px padding + 10px
+ * scrollbar gutter from globals.css `::-webkit-scrollbar { width: 10px }`).
+ */
+#app-main:has([data-live-page]) {
+  padding-left: 0;
+  padding-right: 0;
+  scrollbar-gutter: stable;
+  /* Firefox: keep the gutter close to the 10px webkit width so the chat sits
+     ~16px from the visible viewport edge regardless of browser. */
+  scrollbar-width: thin;
+}
+
+[data-live-page] {
+  padding-left: 16px;
+  padding-right: 6px;
 }
 
 /* -------------------------------------------------------------------------

@@ -8,6 +8,8 @@ type Props = {
   isLive: boolean;
   ingestActive: boolean;
   hasStreamKey: boolean;
+  /** Populated during RTMP live — canonical public URL is `/watch/[id]`. */
+  liveWatchVideoId?: string | null;
 };
 
 type KeyResponse = {
@@ -26,10 +28,11 @@ type SetupResponse = {
   stream?: {
     ingestActive?: boolean;
     isLive?: boolean;
+    vodVideoId?: string | null;
   };
 };
 
-export function GoLiveCard({ slug, isLive, ingestActive, hasStreamKey }: Props) {
+export function GoLiveCard({ slug, isLive, ingestActive, hasStreamKey, liveWatchVideoId }: Props) {
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
   const [loadingKey, setLoadingKey] = useState(false);
   const [rotating, setRotating] = useState(false);
@@ -37,7 +40,14 @@ export function GoLiveCard({ slug, isLive, ingestActive, hasStreamKey }: Props) 
   const [error, setError] = useState<string | null>(null);
   const [liveState, setLiveState] = useState(isLive);
   const [ingestState, setIngestState] = useState(ingestActive);
+  const [watchVideoId, setWatchVideoId] = useState<string | null>(
+    liveWatchVideoId ?? null,
+  );
   const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    setWatchVideoId(liveWatchVideoId ?? null);
+  }, [liveWatchVideoId]);
 
   const streamTarget = useMemo(() => {
     const key = revealedKey ?? "••••••••••••••••";
@@ -55,6 +65,9 @@ export function GoLiveCard({ slug, isLive, ingestActive, hasStreamKey }: Props) 
         if (cancelled || !res.ok || !data.stream) return;
         setIngestState(Boolean(data.stream.ingestActive));
         setLiveState(Boolean(data.stream.isLive));
+        if ("vodVideoId" in data.stream) {
+          setWatchVideoId(data.stream.vodVideoId ?? null);
+        }
       } catch {
         // Ignore transient polling failures.
       }
@@ -296,7 +309,11 @@ export function GoLiveCard({ slug, isLive, ingestActive, hasStreamKey }: Props) 
               Open pre-stream setup
             </Link>
             <Link
-              href={`/live/${slug}`}
+              href={
+                watchVideoId && liveState
+                  ? `/watch/${watchVideoId}`
+                  : `/live/${slug}`
+              }
               className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs hover:bg-surface-2"
             >
               Open public page

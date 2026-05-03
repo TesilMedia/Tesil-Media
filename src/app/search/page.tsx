@@ -6,6 +6,7 @@ import {
   getViewerHiddenRatings,
   ratingFilterWhere,
 } from "@/lib/viewerPrefs";
+import { EXCLUDE_LIVE_RECORDING_PLACEHOLDERS } from "@/lib/videoCatalog";
 import { normaliseCategory } from "@/lib/categories";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +57,7 @@ export default async function SearchPage({
             ],
           },
           ratingWhere,
+          EXCLUDE_LIVE_RECORDING_PLACEHOLDERS,
         ],
       },
       include: { channel: true },

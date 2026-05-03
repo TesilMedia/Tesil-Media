@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { LiveCard } from "@/components/LiveCard";
 import { VideoCard } from "@/components/VideoCard";
 import { getViewerHiddenRatings, ratingFilterWhere } from "@/lib/viewerPrefs";
+import { EXCLUDE_LIVE_RECORDING_PLACEHOLDERS } from "@/lib/videoCatalog";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export default async function HomePage() {
       take: 12,
     }),
     prisma.video.findMany({
-      where: { ...ratingWhere },
+      where: { AND: [ratingWhere, EXCLUDE_LIVE_RECORDING_PLACEHOLDERS] },
       include: { channel: true },
       orderBy: { createdAt: "desc" },
       take: 24,
@@ -25,7 +26,7 @@ export default async function HomePage() {
   ]);
 
   return (
-    <div className="w-full max-w-[1600px] pt-4 pb-6">
+    <div className="w-full pt-4 pb-6">
       {liveStreams.length > 0 && (
         <section className="mb-10">
           <div className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -41,6 +42,7 @@ export default async function HomePage() {
                 rating={s.rating}
                 isLive={s.isLive}
                 streamUrl={s.streamUrl}
+                vodVideoId={s.vodVideoId}
               />
             ))}
           </div>

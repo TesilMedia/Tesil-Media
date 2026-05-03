@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -43,6 +43,15 @@ export default async function LivePage({
   const filtered =
     isContentRating(stream.rating) &&
     (hidden as string[]).includes(stream.rating);
+
+  if (stream.isLive && stream.vodVideoId && stream.streamKey) {
+    if (!filtered || overrideFilter) {
+      const usp = new URLSearchParams();
+      if (overrideFilter) usp.set("override", "1");
+      const suffix = usp.toString() ? `?${usp.toString()}` : "";
+      redirect(`/watch/${stream.vodVideoId}${suffix}`);
+    }
+  }
 
   if (filtered && !overrideFilter) {
     const meta = isContentRating(stream.rating)
@@ -118,17 +127,18 @@ export default async function LivePage({
 
   return (
     <ChatDrawerProvider>
-      <div className="w-full pb-6 pt-2">
+      <div data-live-page className="w-full pb-6 pt-2">
         <div className="flex flex-col gap-2">
           {/* Top row: when the player is height-capped, let chat fill the freed width. */}
-          <div className="flex flex-col gap-2 md:flex-row md:items-stretch live-landscape-row">
-            <div className="min-w-0 md:live-player-slot live-landscape-player">
+          <div className="flex flex-col gap-4 md:flex-row md:items-stretch live-landscape-row">
+            <div className="min-w-0 md:live-player-slot live-landscape-player xl:min-w-0 xl:flex-1">
               {stream.streamKey ? (
                 <LivePlayer
                   src={`/hls/${channel.slug}/index.m3u8`}
                   title={stream.title}
                   liveStartedAt={stream.startedAt}
                   isLive={stream.isLive}
+                  viewportBottomInset={200}
                 />
               ) : (
                 <VideoPlayer
@@ -140,7 +150,7 @@ export default async function LivePage({
             </div>
 
             {/* Right: inline chat panel for tablet-and-up layouts. */}
-            <div className="hidden min-h-0 min-w-72 md:flex md:flex-1 md:self-stretch live-landscape-chat">
+            <div className="hidden min-h-0 min-w-72 md:flex md:flex-1 md:self-stretch live-landscape-chat xl:w-[400px] xl:max-w-[400px] xl:flex-none xl:shrink-0">
               <ChatPanel
                 slug={channel.slug}
                 currentUserId={session?.user?.id ?? null}
@@ -152,14 +162,30 @@ export default async function LivePage({
           <div className="min-w-0">
             {stream.streamKey && (stream.isLive || stream.vodVideoId) ? (
               <div className="flex gap-2">
-                <span className="flex items-center gap-1.5 rounded-full bg-live px-4 py-1.5 text-sm font-medium text-white">
-                  {stream.isLive ? (
-                    <span className="live-pulse inline-block h-1.5 w-1.5 rounded-full bg-white" />
-                  ) : null}
-                  Watch live
-                </span>
+                {stream.vodVideoId ? (
+                  <Link
+                    href={`/watch/${stream.vodVideoId}`}
+                    className="flex items-center gap-1.5 rounded-full bg-live px-4 py-1.5 text-sm font-medium text-white"
+                  >
+                    {stream.isLive ? (
+                      <span className="live-pulse inline-block h-1.5 w-1.5 rounded-full bg-white" />
+                    ) : null}
+                    Watch live
+                  </Link>
+                ) : (
+                  <span className="flex items-center gap-1.5 rounded-full bg-live px-4 py-1.5 text-sm font-medium text-white">
+                    {stream.isLive ? (
+                      <span className="live-pulse inline-block h-1.5 w-1.5 rounded-full bg-white" />
+                    ) : null}
+                    Watch live
+                  </span>
+                )}
                 <Link
-                  href={`/live/${channel.slug}/beginning`}
+                  href={
+                    stream.vodVideoId
+                      ? `/watch/${stream.vodVideoId}?from=start`
+                      : `/live/${channel.slug}/beginning`
+                  }
                   className="rounded-full border border-border bg-surface px-4 py-1.5 text-sm font-medium text-text transition-colors hover:bg-surface-2"
                 >
                   Watch from beginning

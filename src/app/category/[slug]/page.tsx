@@ -16,6 +16,7 @@ import {
   getViewerHiddenRatings,
   ratingFilterWhere,
 } from "@/lib/viewerPrefs";
+import { EXCLUDE_LIVE_RECORDING_PLACEHOLDERS } from "@/lib/videoCatalog";
 
 export const dynamic = "force-dynamic";
 
@@ -48,8 +49,11 @@ export default async function CategoryPage({
     }),
     prisma.video.findMany({
       where: {
-        ...ratingWhere,
-        OR: [{ category: slug }, { category2: slug }],
+        AND: [
+          EXCLUDE_LIVE_RECORDING_PLACEHOLDERS,
+          ratingWhere,
+          { OR: [{ category: slug }, { category2: slug }] },
+        ],
       },
       include: { channel: true },
       orderBy: { createdAt: "desc" },
@@ -58,7 +62,7 @@ export default async function CategoryPage({
   ]);
 
   return (
-    <div className="w-full max-w-[1600px] py-6">
+    <div className="w-full py-6">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
         <div className="flex items-center gap-3">
           <span
@@ -114,6 +118,7 @@ export default async function CategoryPage({
                 rating={s.rating}
                 isLive={s.isLive}
                 streamUrl={s.streamUrl}
+                vodVideoId={s.vodVideoId}
               />
             ))}
           </div>

@@ -41,6 +41,7 @@ export default async function LiveSetupPage() {
       waitingRoomOpen: true,
       isLive: true,
       startedAt: true,
+      vodVideoId: true,
     },
   });
 
@@ -62,7 +63,11 @@ export default async function LiveSetupPage() {
             Back to channel
           </Link>
           <Link
-            href={`/live/${channel.slug}`}
+            href={
+              stream.vodVideoId && stream.isLive
+                ? `/watch/${stream.vodVideoId}`
+                : `/live/${channel.slug}`
+            }
             className="rounded-full bg-accent-blue px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-blue-hover"
           >
             Open public page
@@ -81,6 +86,7 @@ export default async function LiveSetupPage() {
         initialWaitingRoomOpen={stream.waitingRoomOpen}
         initialIsLive={stream.isLive}
         initialStartedAt={stream.startedAt}
+        initialVodVideoId={stream.vodVideoId}
       />
     </div>
   );

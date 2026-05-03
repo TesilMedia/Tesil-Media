@@ -3,10 +3,15 @@ import { notFound } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { LivePlayer } from "@/components/LivePlayer";
 import { VideoCard } from "@/components/VideoCard";
 import { RatingBadge } from "@/components/RatingBadge";
 import { Comments, type CommentDTO } from "@/components/Comments";
 import { VideoLikeBar } from "@/components/LikeDislike";
+import { ChatPanel } from "@/components/ChatPanel";
+import { ChatDrawer } from "@/components/ChatDrawer";
+import { ChatDrawerProvider } from "@/components/ChatDrawerContext";
+import { ChatToggleButton } from "@/components/ChatToggleButton";
 import { formatViews } from "@/lib/format";
 import { RATING_META, isContentRating } from "@/lib/ratings";
 import { categoriesFromDb } from "@/lib/categories";
@@ -16,6 +21,7 @@ import {
 } from "@/lib/viewerPrefs";
 import { auth } from "@/lib/auth";
 import { titleOverflowClampClass } from "@/lib/titleClamp";
+import { EXCLUDE_LIVE_RECORDING_PLACEHOLDERS } from "@/lib/videoCatalog";
 
 export const dynamic = "force-dynamic";
 
@@ -24,14 +30,18 @@ export default async function WatchPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ override?: string }>;
+  searchParams: Promise<{ override?: string; from?: string }>;
 }) {
-  const [{ id }, { override }] = await Promise.all([params, searchParams]);
+  const [{ id }, { override, from }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const overrideFilter = override === "1";
+  const fromBeginning = from === "start";
 
   const video = await prisma.video.findUnique({
     where: { id },
-    include: { channel: true },
+    include: { channel: true, liveStream: true },
   });
   if (!video) notFound();
 
@@ -98,68 +108,83 @@ export default async function WatchPage({
     );
   }
 
-  prisma.video
-    .update({ where: { id }, data: { views: { increment: 1 } } })
-    .catch(() => {});
+  const ls = video.liveStream;
+  const slug = video.channel.slug;
+  const isPlaceholderRecording = video.sourceUrl.startsWith("/hls/");
+  const isRtmpLive = Boolean(
+    ls?.isLive && ls.streamKey && isPlaceholderRecording,
+  );
+  const wantsBeginningReplay = fromBeginning && isRtmpLive;
+  const isRecordingProcessing = Boolean(
+    ls && !ls.isLive && isPlaceholderRecording,
+  );
+
+  if (!isPlaceholderRecording) {
+    prisma.video
+      .update({ where: { id }, data: { views: { increment: 1 } } })
+      .catch(() => {});
+  }
 
   const ratingWhere = ratingFilterWhere(hidden);
   const relatedSlugs = categoriesFromDb(video.category, video.category2);
   const viewerId = session?.user?.id ?? null;
 
-  const [related, commentRows, videoLike, viewerCommentLikes] = await Promise.all([
-    prisma.video.findMany({
-      where: {
-        AND: [
-          {
-            id: { not: video.id },
-            OR: [
-              { channelId: video.channelId },
-              ...(relatedSlugs.length > 0
-                ? [
-                    {
-                      OR: relatedSlugs.flatMap((slug) => [
-                        { category: slug },
-                        { category2: slug },
-                      ]),
-                    },
-                  ]
-                : []),
-            ],
-          },
-          ratingWhere,
-        ],
-      },
-      include: { channel: true },
-      orderBy: { views: "desc" },
-      take: 8,
-    }),
-    prisma.comment.findMany({
-      where: { videoId: video.id },
-      orderBy: { createdAt: "desc" },
-      take: 500,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-            channel: { select: { slug: true, name: true, avatarUrl: true } },
+  const [related, commentRows, videoLike, viewerCommentLikes] =
+    await Promise.all([
+      prisma.video.findMany({
+        where: {
+          AND: [
+            EXCLUDE_LIVE_RECORDING_PLACEHOLDERS,
+            {
+              id: { not: video.id },
+              OR: [
+                { channelId: video.channelId },
+                ...(relatedSlugs.length > 0
+                  ? [
+                      {
+                        OR: relatedSlugs.flatMap((s) => [
+                          { category: s },
+                          { category2: s },
+                        ]),
+                      },
+                    ]
+                  : []),
+              ],
+            },
+            ratingWhere,
+          ],
+        },
+        include: { channel: true },
+        orderBy: { views: "desc" },
+        take: 8,
+      }),
+      prisma.comment.findMany({
+        where: { videoId: video.id },
+        orderBy: { createdAt: "desc" },
+        take: 500,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+              channel: { select: { slug: true, name: true, avatarUrl: true } },
+            },
           },
         },
-      },
-    }),
-    viewerId
-      ? prisma.videoLike.findUnique({
-          where: { userId_videoId: { userId: viewerId, videoId: video.id } },
-        })
-      : null,
-    viewerId
-      ? prisma.commentLike.findMany({
-          where: { userId: viewerId, comment: { videoId: video.id } },
-          select: { commentId: true, value: true },
-        })
-      : [],
-  ]);
+      }),
+      viewerId
+        ? prisma.videoLike.findUnique({
+            where: { userId_videoId: { userId: viewerId, videoId: video.id } },
+          })
+        : null,
+      viewerId
+        ? prisma.commentLike.findMany({
+            where: { userId: viewerId, comment: { videoId: video.id } },
+            select: { commentId: true, value: true },
+          })
+        : [],
+    ]);
 
   const commentVoteMap = new Map<string, number>(
     (viewerCommentLikes as { commentId: string; value: number }[]).map(
@@ -200,8 +225,268 @@ export default async function WatchPage({
       }
     : null;
 
+  const sessionT = Date.now();
+
+  const metaBlock = (
+    <>
+      <div className="mt-4 flex items-start gap-2">
+        <h1
+          className={`flex-1 min-w-0 text-xl font-semibold leading-tight ${titleOverflowClampClass(video.title)}`}
+        >
+          {video.title}
+        </h1>
+        <div className="flex shrink-0 items-center gap-2">
+          {isOwner ? (
+            <Link
+              href={`/me/videos/${video.id}/edit`}
+              className="inline-flex items-center justify-center rounded-full border border-border bg-surface px-1.5 py-0.5 text-[11px] hover:bg-surface-2"
+            >
+              Edit
+            </Link>
+          ) : null}
+          <RatingBadge rating={video.rating} size="sm" />
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+        <Link
+          href={`/c/${video.channel.slug}`}
+          className="flex w-fit items-center gap-3"
+        >
+          <span className="h-10 w-10 overflow-hidden rounded-full bg-surface-2">
+            {video.channel.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={video.channel.avatarUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : null}
+          </span>
+          <span>
+            <span className="block font-medium">{video.channel.name}</span>
+            <span className="block text-xs text-muted">
+              {video.channel.followers.toLocaleString()} followers
+            </span>
+          </span>
+        </Link>
+        <div className="flex items-center gap-4">
+          <VideoLikeBar
+            videoId={video.id}
+            initialLikes={video.likes}
+            initialDislikes={video.dislikes}
+            initialVote={(videoLike?.value ?? 0) as 0 | 1 | -1}
+            disabled={!viewerId}
+          />
+          <div className="text-sm text-muted">
+            {isRtmpLive ? (
+              <>
+                <div className="text-text">{formatViews(ls?.viewers ?? 0)}</div>
+                <div>watching now</div>
+              </>
+            ) : (
+              <>
+                {formatViews(video.views)} views
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {video.description ? (
+        <p className="mt-4 whitespace-pre-line text-sm text-muted">
+          {video.description}
+        </p>
+      ) : null}
+    </>
+  );
+
+  if (isRecordingProcessing) {
+    return (
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 py-16 text-center">
+        <h1
+          className={`text-xl font-semibold ${titleOverflowClampClass(video.title)}`}
+        >
+          {video.title}
+        </h1>
+        <p className="text-muted">
+          The broadcast has ended. The replay file is still being processed —
+          refresh in a moment.
+        </p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Link
+            href={`/watch/${video.id}`}
+            className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover"
+          >
+            Refresh
+          </Link>
+          <Link
+            href={`/c/${slug}`}
+            className="rounded-full border border-border bg-surface px-4 py-2 text-sm hover:bg-surface-2"
+          >
+            Channel
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (wantsBeginningReplay) {
+    return (
+      <div className="w-full py-6">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0">
+            <VideoPlayer
+              src={`/api/stream/${slug}/beginning?t=${sessionT}`}
+              title={video.title}
+              liveStartedAt={ls?.startedAt ?? null}
+            />
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Link
+                href={`/watch/${video.id}`}
+                className="rounded-full border border-border bg-surface px-4 py-1.5 text-sm font-medium text-text transition-colors hover:bg-surface-2"
+              >
+                Watch live
+              </Link>
+              <span className="rounded-full bg-accent px-4 py-1.5 text-sm font-medium text-on-accent">
+                From beginning
+              </span>
+            </div>
+
+            {metaBlock}
+
+            <Comments
+              videoId={video.id}
+              initial={initialComments}
+              viewer={viewer}
+            />
+          </div>
+
+          <aside className="min-w-0">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">
+              Up next
+            </h2>
+            <div className="flex flex-col gap-4">
+              {related.map((v) => (
+                <VideoCard
+                  key={v.id}
+                  id={v.id}
+                  title={v.title}
+                  thumbnail={v.thumbnail}
+                  durationSec={v.durationSec}
+                  views={v.views}
+                  createdAt={v.createdAt}
+                  rating={v.rating}
+                  sourceUrl={v.sourceUrl}
+                  channel={{
+                    slug: v.channel.slug,
+                    name: v.channel.name,
+                    avatarUrl: v.channel.avatarUrl,
+                  }}
+                />
+              ))}
+              {related.length === 0 ? (
+                <p className="text-sm text-muted">No related videos.</p>
+              ) : null}
+            </div>
+          </aside>
+        </div>
+      </div>
+    );
+  }
+
+  if (isRtmpLive && ls) {
+    return (
+      <ChatDrawerProvider>
+        <div data-live-page className="w-full pb-6 pt-2">
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-stretch">
+              <div className="min-w-0 md:live-player-slot live-landscape-player xl:min-w-0 xl:flex-1">
+                <LivePlayer
+                  src={`/hls/${slug}/index.m3u8`}
+                  title={video.title}
+                  liveStartedAt={ls.startedAt}
+                  isLive={ls.isLive}
+                  viewportBottomInset={200}
+                />
+              </div>
+              <div className="hidden min-h-0 min-w-72 md:flex md:flex-1 md:self-stretch live-landscape-chat xl:w-[400px] xl:max-w-[400px] xl:flex-none xl:shrink-0">
+                <ChatPanel
+                  slug={slug}
+                  currentUserId={viewerId}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-x-4">
+              <div className="min-w-0 flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex items-center gap-1.5 rounded-full bg-live px-4 py-1.5 text-sm font-medium text-white">
+                    <span className="live-pulse inline-block h-1.5 w-1.5 rounded-full bg-white" />
+                    Watch live
+                  </span>
+                  <Link
+                    href={`/watch/${video.id}?from=start`}
+                    className="rounded-full border border-border bg-surface px-4 py-1.5 text-sm font-medium text-text transition-colors hover:bg-surface-2"
+                  >
+                    Watch from beginning
+                  </Link>
+                </div>
+
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">{metaBlock}</div>
+                  <div className="md:hidden">
+                    <ChatToggleButton />
+                  </div>
+                </div>
+
+                <Comments
+                  videoId={video.id}
+                  initial={initialComments}
+                  viewer={viewer}
+                />
+              </div>
+
+              <aside className="min-w-0">
+                <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">
+                  Up next
+                </h2>
+                <div className="flex flex-col gap-4">
+                  {related.map((v) => (
+                    <VideoCard
+                      key={v.id}
+                      id={v.id}
+                      title={v.title}
+                      thumbnail={v.thumbnail}
+                      durationSec={v.durationSec}
+                      views={v.views}
+                      createdAt={v.createdAt}
+                      rating={v.rating}
+                      sourceUrl={v.sourceUrl}
+                      channel={{
+                        slug: v.channel.slug,
+                        name: v.channel.name,
+                        avatarUrl: v.channel.avatarUrl,
+                      }}
+                    />
+                  ))}
+                  {related.length === 0 ? (
+                    <p className="text-sm text-muted">No related videos.</p>
+                  ) : null}
+                </div>
+              </aside>
+            </div>
+          </div>
+
+          <ChatDrawer slug={slug} currentUserId={viewerId} />
+        </div>
+      </ChatDrawerProvider>
+    );
+  }
+
   return (
-    <div className="w-full max-w-[1600px] py-6">
+    <div className="w-full py-6">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
           <VideoPlayer
@@ -210,66 +495,7 @@ export default async function WatchPage({
             title={video.title}
           />
 
-          <div className="mt-4 flex items-start gap-2">
-            <h1
-              className={`flex-1 min-w-0 text-xl font-semibold leading-tight ${titleOverflowClampClass(video.title)}`}
-            >
-              {video.title}
-            </h1>
-            <div className="flex shrink-0 items-center gap-2">
-              {isOwner ? (
-                <Link
-                  href={`/me/videos/${video.id}/edit`}
-                  className="inline-flex items-center justify-center rounded-full border border-border bg-surface px-1.5 py-0.5 text-[11px] hover:bg-surface-2"
-                >
-                  Edit
-                </Link>
-              ) : null}
-              <RatingBadge rating={video.rating} size="sm" />
-            </div>
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
-            <Link
-              href={`/c/${video.channel.slug}`}
-              className="flex w-fit items-center gap-3"
-            >
-              <span className="h-10 w-10 overflow-hidden rounded-full bg-surface-2">
-                {video.channel.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={video.channel.avatarUrl}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                ) : null}
-              </span>
-              <span>
-                <span className="block font-medium">{video.channel.name}</span>
-                <span className="block text-xs text-muted">
-                  {video.channel.followers.toLocaleString()} followers
-                </span>
-              </span>
-            </Link>
-            <div className="flex items-center gap-4">
-              <VideoLikeBar
-                videoId={video.id}
-                initialLikes={video.likes}
-                initialDislikes={video.dislikes}
-                initialVote={(videoLike?.value ?? 0) as 0 | 1 | -1}
-                disabled={!viewerId}
-              />
-              <div className="text-sm text-muted">
-                {formatViews(video.views)} views
-              </div>
-            </div>
-          </div>
-
-          {video.description ? (
-            <p className="mt-4 whitespace-pre-line text-sm text-muted">
-              {video.description}
-            </p>
-          ) : null}
+          {metaBlock}
 
           <Comments
             videoId={video.id}

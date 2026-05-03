@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -19,31 +20,54 @@ type PlayerSize = {
 type ViewportFittedPlayerFrameProps = {
   children: ReactNode;
   className?: string;
+  /**
+   * Extra pixels subtracted from available viewport height when fitting the
+   * player (e.g. keep title / channel / actions visible without scrolling).
+   */
+  bottomInset?: number;
 };
 
 export function ViewportFittedPlayerFrame({
   children,
   className,
+  bottomInset = 0,
 }: ViewportFittedPlayerFrameProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<PlayerSize | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const updateSize = () => {
       const frame = frameRef.current;
       if (!frame) return;
 
       const rect = frame.getBoundingClientRect();
       const parentWidth = frame.parentElement?.clientWidth ?? rect.width;
+      /* Avoid a width jump: first layout pass can report 0 before flex resolves. */
+      if (parentWidth < 2) return;
+
       const availableHeight = Math.max(
         0,
-        window.innerHeight - rect.top - BOTTOM_VIEWPORT_GAP,
+        window.innerHeight -
+          rect.top -
+          BOTTOM_VIEWPORT_GAP -
+          bottomInset,
       );
-      const width = Math.max(
+      /*
+       * Fill the parent's width so side-by-side layouts (live player + chat)
+       * never show empty horizontal gutter: the old min(parent, height×AR) rule
+       * capped width by viewport height (especially with bottomInset), which
+       * looked correct on first paint (width 100%) then "snapped" narrower after
+       * layout measured—pillarboxing beside the video instead of beside the chat.
+       *
+       * Keep the frame full-width; when the natural 16:9 height exceeds what fits
+       * below the fold, cap height and letterbox vertically (video uses object-contain).
+       */
+      const width = Math.max(0, parentWidth);
+      const heightNatural = width / PLAYER_ASPECT_RATIO;
+      const height = Math.max(
         0,
-        Math.min(parentWidth, availableHeight * PLAYER_ASPECT_RATIO),
+        Math.min(heightNatural, availableHeight),
       );
-      const height = width / PLAYER_ASPECT_RATIO;
 
       setSize((current) => {
         if (
@@ -59,6 +83,7 @@ export function ViewportFittedPlayerFrame({
     };
 
     updateSize();
+    const rafId = requestAnimationFrame(() => updateSize());
 
     const parent = frameRef.current?.parentElement;
     const resizeObserver = new ResizeObserver(updateSize);
@@ -68,11 +93,12 @@ export function ViewportFittedPlayerFrame({
     window.addEventListener("orientationchange", updateSize);
 
     return () => {
+      cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateSize);
       window.removeEventListener("orientationchange", updateSize);
     };
-  }, []);
+  }, [bottomInset]);
 
   /**
    * The player runs in an iframe; taps on the host page never reach the iframe
@@ -108,10 +134,10 @@ export function ViewportFittedPlayerFrame({
   }, []);
 
   const frameStyle: CSSProperties = {
-    aspectRatio: "16 / 9",
-    width: size ? `${size.width}px` : "100%",
-    height: size ? `${size.height}px` : undefined,
     maxWidth: "100%",
+    ...(size
+      ? { width: `${size.width}px`, height: `${size.height}px` }
+      : { width: "100%", aspectRatio: "16 / 9" }),
   };
 
   return (

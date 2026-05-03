@@ -74,7 +74,16 @@ export async function POST(req: Request) {
   if (parsed.data.event === "prePublish") {
     const stream = await prisma.liveStream.findFirst({
       where: { channel: { slug: streamName } },
-      select: { id: true, streamKey: true },
+      select: {
+        id: true,
+        streamKey: true,
+        title: true,
+        category: true,
+        category2: true,
+        rating: true,
+        thumbnail: true,
+        channelId: true,
+      },
     });
     if (!stream) return NextResponse.json({ ok: true });
     if (
@@ -84,9 +93,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     }
     const now = new Date();
-    await prisma.$transaction([
-      prisma.liveMessage.deleteMany({ where: { streamId: stream.id } }),
-      prisma.liveStream.update({
+    await prisma.$transaction(async (tx) => {
+      await tx.liveMessage.deleteMany({ where: { streamId: stream.id } });
+      const sessionVideo = await tx.video.create({
+        data: {
+          id: randomUUID(),
+          title: stream.title,
+          category: stream.category ?? null,
+          category2: stream.category2 ?? null,
+          rating: stream.rating,
+          thumbnail: stream.thumbnail ?? null,
+          sourceUrl: `/hls/${streamName}/index.m3u8`,
+          channelId: stream.channelId,
+        },
+      });
+      await tx.liveStream.update({
         where: { id: stream.id },
         data: {
           ingestActive: true,
@@ -94,10 +115,10 @@ export async function POST(req: Request) {
           startedAt: now,
           lastIngestAt: now,
           waitingRoomOpen: false,
-          vodVideoId: null,
+          vodVideoId: sessionVideo.id,
         },
-      }),
-    ]);
+      });
+    });
   } else if (parsed.data.event === "donePublish") {
     const stream = await prisma.liveStream.findFirst({
       where: { channel: { slug: streamName } },
@@ -130,6 +151,7 @@ export async function POST(req: Request) {
         rating: true,
         thumbnail: true,
         channelId: true,
+        vodVideoId: true,
       },
     });
     if (!liveStream) return NextResponse.json({ ok: true });
@@ -147,22 +169,42 @@ export async function POST(req: Request) {
       thumbnail = await generateMidframeThumbnail(vodAbs, thumbDir);
     }
 
-    const vodVideo = await prisma.video.create({
-      data: {
-        id: randomUUID(),
-        title: liveStream.title,
-        category: liveStream.category ?? null,
-        category2: liveStream.category2 ?? null,
-        rating: liveStream.rating,
-        thumbnail,
-        sourceUrl: `/uploads/videos/${parsed.data.vodId}.mp4`,
-        channelId: liveStream.channelId,
-      },
-    });
-    await prisma.liveStream.update({
-      where: { channelId: liveStream.channelId },
-      data: { vodVideoId: vodVideo.id, thumbnail: null },
-    });
+    const mp4Source = `/uploads/videos/${parsed.data.vodId}.mp4`;
+
+    if (liveStream.vodVideoId) {
+      await prisma.video.update({
+        where: { id: liveStream.vodVideoId },
+        data: {
+          title: liveStream.title,
+          category: liveStream.category ?? null,
+          category2: liveStream.category2 ?? null,
+          rating: liveStream.rating,
+          thumbnail,
+          sourceUrl: mp4Source,
+        },
+      });
+      await prisma.liveStream.update({
+        where: { channelId: liveStream.channelId },
+        data: { thumbnail: null },
+      });
+    } else {
+      const vodVideo = await prisma.video.create({
+        data: {
+          id: randomUUID(),
+          title: liveStream.title,
+          category: liveStream.category ?? null,
+          category2: liveStream.category2 ?? null,
+          rating: liveStream.rating,
+          thumbnail,
+          sourceUrl: mp4Source,
+          channelId: liveStream.channelId,
+        },
+      });
+      await prisma.liveStream.update({
+        where: { channelId: liveStream.channelId },
+        data: { vodVideoId: vodVideo.id, thumbnail: null },
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });

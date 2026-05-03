@@ -74,7 +74,10 @@ export default async function RootLayout({
               <TopNavRevealButton />
             <div className="flex min-h-0 flex-1 overflow-hidden">
                 <Sidebar />
-                <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4">
+                <main
+                  id="app-main"
+                  className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4"
+                >
                   {children}
                 </main>
               </div>
