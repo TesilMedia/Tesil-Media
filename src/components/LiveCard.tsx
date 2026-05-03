@@ -25,16 +25,25 @@ type LiveCardProps = {
   isLive: boolean;
   /** Canonical watch URL for RTMP live sessions (set once OBS connects). */
   vodVideoId?: string | null;
-  // Stream URL — direct video files (MP4/WebM) and HLS (.m3u8) are previewed
-  // natively; embed-only sources like YouTube/Twitch fall back to the thumbnail.
+  // Stream URL — direct video files (MP4/WebM) use native preview; HLS
+  // (.m3u8) uses the same hls.js / native split as `LivePlayer`. Embed-only
+  // sources like YouTube/Twitch fall back to the thumbnail.
   streamUrl?: string | null;
 };
 
 const HOVER_DELAY_MS = 400;
 
-// Direct video files + HLS for live streams. HLS plays natively in Safari;
-// other browsers fail gracefully and fall back to the static thumbnail.
+// Direct video files + HLS for live streams (HLS via hls.js except iOS WebKit).
 const LIVE_PREVIEW_EXT = /\.(mp4|m4v|webm|ogg|ogv|mov|m3u8)(\?|#|$)/i;
+
+function isHlsManifestUrl(url: string): boolean {
+  return /\.m3u8(\?|#|$)/i.test(url);
+}
+
+/** Android MSE + LL-HLS can underrun on tiny card previews; match LivePlayer tradeoff. */
+function prefersMobileLiveReliability(ua: string): boolean {
+  return /Android/i.test(ua);
+}
 
 function getPreviewableLiveSrc(streamUrl?: string | null): string | null {
   if (!streamUrl) return null;
@@ -141,6 +150,145 @@ export function LiveCard(props: LiveCardProps) {
     setPreviewReady(true);
   };
 
+  /**
+   * Live HLS (fMP4 / LL-HLS) matches the main `LivePlayer`: WebKit-on-iOS uses
+   * native HLS; Chrome / Edge / Firefox / desktop Safari need hls.js. A bare
+   * `<video src="*.m3u8">` fails on Chrome and the preview vanishes on error.
+   */
+  useEffect(() => {
+    if (!showPreview || !previewSrc) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    let cancelled = false;
+    let hlsInstance: import("hls.js").default | null = null;
+
+    if (!isHlsManifestUrl(previewSrc)) {
+      video.src = previewSrc;
+      return () => {
+        cancelled = true;
+        try {
+          video.pause();
+          video.removeAttribute("src");
+          video.load();
+        } catch {
+          // ignore
+        }
+      };
+    }
+
+    const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
+    const canNativeHls = video.canPlayType("application/vnd.apple.mpegurl") !== "";
+    const isIosWebkit =
+      /iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && "ontouchend" in document);
+    const useNativeHls = canNativeHls && isIosWebkit;
+    const mobileLiveReliability = prefersMobileLiveReliability(ua);
+
+    if (useNativeHls) {
+      video.src = previewSrc;
+      return () => {
+        cancelled = true;
+        try {
+          video.pause();
+          video.removeAttribute("src");
+          video.load();
+        } catch {
+          // ignore
+        }
+      };
+    }
+
+    void (async () => {
+      const HlsMod = await import("hls.js");
+      if (cancelled) return;
+      const Hls = HlsMod.default;
+      if (!Hls.isSupported()) {
+        if (!cancelled) setShowPreview(false);
+        return;
+      }
+
+      hlsInstance = new Hls({
+        ...(mobileLiveReliability
+          ? {
+              lowLatencyMode: false,
+              enableWorker: false,
+              liveSyncDurationCount: 5,
+              liveMaxLatencyDurationCount: 14,
+              maxLiveSyncPlaybackRate: 1.75,
+              fragLoadingTimeOut: 12000,
+              manifestLoadingTimeOut: 12000,
+              levelLoadingTimeOut: 12000,
+              startFragPrefetch: true,
+              maxBufferHole: 0.25,
+            }
+          : {
+              lowLatencyMode: true,
+              enableWorker: true,
+              fragLoadingTimeOut: 4000,
+              manifestLoadingTimeOut: 4000,
+              levelLoadingTimeOut: 4000,
+            }),
+        liveDurationInfinity: true,
+        backBufferLength: mobileLiveReliability ? 8 : 4,
+        defaultAudioCodec: "mp4a.40.2",
+      });
+
+      if (cancelled) {
+        try {
+          hlsInstance.destroy();
+        } catch {
+          // ignore
+        }
+        hlsInstance = null;
+        return;
+      }
+
+      hlsInstance.on(Hls.Events.ERROR, (_evt, data) => {
+        if (cancelled || !hlsInstance) return;
+        if (!data.fatal) return;
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          try {
+            hlsInstance.startLoad();
+            return;
+          } catch {
+            /* fall through */
+          }
+        }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          try {
+            hlsInstance.recoverMediaError();
+            return;
+          } catch {
+            /* fall through */
+          }
+        }
+        setShowPreview(false);
+      });
+
+      hlsInstance.attachMedia(video);
+      hlsInstance.loadSource(previewSrc);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (hlsInstance) {
+        try {
+          hlsInstance.destroy();
+        } catch {
+          // ignore
+        }
+        hlsInstance = null;
+      }
+      try {
+        video.pause();
+        video.removeAttribute("src");
+        video.load();
+      } catch {
+        // ignore
+      }
+    };
+  }, [showPreview, previewSrc]);
+
   const handleMobilePreviewButtonClick = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -194,7 +342,6 @@ export function LiveCard(props: LiveCardProps) {
         {showPreview && previewSrc ? (
           <video
             ref={videoRef}
-            src={previewSrc}
             muted
             loop
             playsInline
